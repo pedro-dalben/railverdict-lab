@@ -5,8 +5,8 @@ analyzers:
     enabled: true
     required: true
   minitest:
-    enabled: false
-    required: false
+    enabled: true
+    required: true
   rspec:
     enabled: true
     required: true

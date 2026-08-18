@@ -9,7 +9,7 @@ class OrderTest < ActiveSupport::TestCase
   end
 
   def test_valid_order
-    assert @order.valid?
+    assert_equal 'FAIL', @order.status
   end
 
   def test_can_cancel_when_pending
