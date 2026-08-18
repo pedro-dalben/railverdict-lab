@@ -17,4 +17,8 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def formatted_order_total
+    format("%.2f", total_amount)
+  end
 end
