@@ -17,4 +17,8 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def expired_waiver_calc
+    unused_expired_var = 456
+  end
 end
