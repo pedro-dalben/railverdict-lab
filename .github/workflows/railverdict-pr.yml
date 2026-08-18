@@ -12,6 +12,8 @@ jobs:
   railverdict-gate:
     name: RailVerdict Raw Gate
     runs-on: ubuntu-latest
+    outputs:
+      exit_code: ${{ steps.check.outputs.exit_code }}
     steps:
       - name: Checkout target repository
         uses: actions/checkout@v4
@@ -26,19 +28,41 @@ jobs:
 
       - name: Checkout and install RailVerdict candidate gem
         run: |
+          mkdir -p artifacts
           CANDIDATE_REV=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["revision"]')
           CANDIDATE_REPO=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["repository"]')
+          EXPECTED_GEM_VERSION=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["gem_version"]')
+          EXPECTED_SHA=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["gem_sha256"]')
           echo "Building candidate from $CANDIDATE_REPO at revision $CANDIDATE_REV"
           
           git clone "$CANDIDATE_REPO" /tmp/railverdict-src
-          cd /tmp/railverdict-src
-          git checkout "$CANDIDATE_REV"
-          gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          (
+            cd /tmp/railverdict-src
+            git checkout "$CANDIDATE_REV"
+            gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          )
+          
+          BUILT_SHA=$(sha256sum /tmp/rail_verdict-candidate.gem | awk '{print $1}')
           gem install --local /tmp/rail_verdict-candidate.gem
           
           echo "Installed railverdict:"
           which railverdict
-          railverdict --version
+          INSTALLED_VERSION=$(railverdict --version 2>&1 || true)
+          echo "$INSTALLED_VERSION"
+          
+          cat <<EOF > artifacts/candidate-identity.json
+          {
+            "repository": "$CANDIDATE_REPO",
+            "revision": "$CANDIDATE_REV",
+            "installed_version": "$INSTALLED_VERSION",
+            "expected_version": "$EXPECTED_GEM_VERSION",
+            "built_sha256": "$BUILT_SHA",
+            "frozen_sha256": "$EXPECTED_SHA",
+            "sha256_match": $([ "$BUILT_SHA" = "$EXPECTED_SHA" ] && echo "true" || echo "false"),
+            "validation_type": "source-revision",
+            "built_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          EOF
 
       - name: Explicit bundler-audit database refresh
         run: |
@@ -56,7 +80,6 @@ jobs:
           
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
           echo "RailVerdict finished with exit code: $EXIT_CODE"
-          exit $EXIT_CODE
 
       - name: Upload check artifacts
         if: always()
@@ -87,20 +110,22 @@ jobs:
           path: artifacts/
 
       - name: Run Lab Oracle assertion
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          EXIT_CODE: ${{ needs.railverdict-gate.outputs.exit_code }}
         run: |
-          BRANCH_NAME="${{ github.head_ref }}"
           echo "Evaluating Oracle for branch: $BRANCH_NAME"
           
-          # Extract scenario ID from branch or manifest
+          # Extract scenario ID from exact branch match in manifest
           SCENARIO_ID=$(ruby -ryaml -e '
             manifest = YAML.safe_load(File.read("lab/scenarios.yml"))
             branch = ENV["BRANCH_NAME"]
-            sc = manifest["scenarios"].find { |s| s["branch"] == branch || branch&.include?(s["id"].downcase) }
+            sc = manifest["scenarios"].find { |s| s["branch"] == branch }
             puts sc ? sc["id"] : "UNKNOWN"
           ')
           
           echo "Identified Scenario: $SCENARIO_ID"
-          EXIT_CODE="${{ needs.railverdict-gate.outputs.exit_code }}"
+          echo "Product Exit Code: $EXIT_CODE"
           
           ruby scripts/lab_oracle \
             --scenario "$SCENARIO_ID" \

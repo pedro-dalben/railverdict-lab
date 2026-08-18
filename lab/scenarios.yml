@@ -40,7 +40,7 @@ scenarios:
   - id: "RVLAB-04"
     title: "Real Minitest failure"
     category: "core_pr"
-    branch: "lab/04-real-minitest-failure"
+    branch: "lab/04-minitest-failure"
     description: "Introduce a failing Minitest assertion in changed scope."
     expected:
       gate: "FAIL"
@@ -51,7 +51,7 @@ scenarios:
   - id: "RVLAB-05"
     title: "Real RSpec failure"
     category: "core_pr"
-    branch: "lab/05-real-rspec-failure"
+    branch: "lab/05-rspec-failure"
     description: "Introduce a failing RSpec example in changed scope."
     expected:
       gate: "FAIL"
@@ -74,7 +74,7 @@ scenarios:
   - id: "RVLAB-07"
     title: "Required analyzer unavailable"
     category: "core_pr"
-    branch: "lab/07-analyzer-unavailable"
+    branch: "lab/07-unavailable-analyzer"
     description: "A required analyzer executable is missing or fails to spawn."
     expected:
       gate: "INCOMPLETE"
@@ -120,7 +120,7 @@ scenarios:
   - id: "RVLAB-11"
     title: "Changed scope vs historical debt"
     category: "core_pr"
-    branch: "lab/11-changed-scope-debt"
+    branch: "lab/11-changed-scope"
     description: "Verify that changed scope filters regressions while baseline shields unrelated legacy debt."
     expected:
       gate: "FAIL"
@@ -132,7 +132,7 @@ scenarios:
   - id: "RVLAB-12"
     title: "Real changed-line coverage"
     category: "core_pr"
-    branch: "lab/12-changed-line-coverage"
+    branch: "lab/12-coverage-gate"
     description: "Generate real SimpleCov coverage artifact and verify changed-line coverage metrics in result JSON."
     expected:
       gate: "PASS"

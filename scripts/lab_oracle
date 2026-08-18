@@ -30,14 +30,46 @@ unless scenario
 end
 
 expected = scenario.fetch("expected", {})
+SUPPORTED_EXPECTATION_KEYS = %w[
+  gate
+  completion_status
+  policy_status
+  exit_code
+  introduced_min
+  introduced_max
+  introduced_count
+  existing_min
+  existing_max
+  existing_count
+  waived_min
+  waived_max
+  waived_count
+  boundary_changed
+  boundary_changed_config
+  boundary_changed_waivers
+  boundary_changed_baseline
+  target_status
+  mcp_initialized
+  initial_gate
+  final_gate
+].freeze
+
+unknown_keys = expected.keys.map(&:to_s) - SUPPORTED_EXPECTATION_KEYS
+unless unknown_keys.empty?
+  $stderr.puts "[ORACLE ERROR] Scenario #{scenario_id} contains unsupported expectation key(s): #{unknown_keys.join(', ')}"
+  exit 2
+end
+
 actual_result = nil
 
-if result_json_path && File.file?(result_json_path)
+if result_json_path && File.file?(result_json_path) && !File.zero?(result_json_path)
   begin
     actual_result = JSON.parse(File.read(result_json_path))
   rescue JSON::ParserError => e
     $stderr.puts "[ORACLE ERROR] Malformed result JSON: #{e.message}"
   end
+else
+  $stderr.puts "[ORACLE WARNING] Result JSON file missing or empty: #{result_json_path}"
 end
 
 actual_gate = actual_result&.dig("gate") || actual_result&.dig("result", "gate") || "UNKNOWN"
@@ -51,6 +83,16 @@ comparison_counts = actual_result&.dig("comparison", "counts") || actual_result&
 introduced_count = comparison_counts["introduced"] || findings.count { |f| f["state"] == "introduced" }
 existing_count = comparison_counts["existing"] || findings.count { |f| f["state"] == "existing" }
 waived_count = comparison_counts["waived"] || findings.count { |f| f["state"] == "waived" || f["waived"] }
+
+# Extract anti-cheating boundary & repair status
+actual_boundary_changed = actual_result&.dig("verification_boundary_changed") || actual_result&.dig("boundary_changed")
+actual_boundary_config = actual_result&.dig("boundary_details", "config_changed") || actual_result&.dig("boundary_changed_config")
+actual_boundary_waivers = actual_result&.dig("boundary_details", "waivers_changed") || actual_result&.dig("boundary_changed_waivers")
+actual_boundary_baseline = actual_result&.dig("boundary_details", "baseline_changed") || actual_result&.dig("boundary_changed_baseline")
+actual_target_status = actual_result&.dig("target_status")
+actual_mcp_init = actual_result&.dig("mcp_initialized")
+actual_initial_gate = actual_result&.dig("initial_gate")
+actual_final_gate = actual_result&.dig("final_gate")
 
 checks = []
 
@@ -73,8 +115,8 @@ if expected.key?("policy_status")
 end
 
 # 4. Exit code check
-if expected.key?("exit_code") && !actual_exit_code.nil?
-  matched = (expected["exit_code"] == actual_exit_code)
+if expected.key?("exit_code")
+  matched = (!actual_exit_code.nil? && expected["exit_code"] == actual_exit_code)
   checks << { name: "exit_code", expected: expected["exit_code"], actual: actual_exit_code, matched: matched }
 end
 
@@ -92,10 +134,68 @@ if expected.key?("introduced_count")
   checks << { name: "introduced_count", expected: expected["introduced_count"], actual: introduced_count, matched: matched }
 end
 
-# 6. Waived count assertions
+# 6. Existing count assertions
+if expected.key?("existing_min")
+  matched = (existing_count >= expected["existing_min"])
+  checks << { name: "existing_min", expected: ">= #{expected['existing_min']}", actual: existing_count, matched: matched }
+end
+if expected.key?("existing_max")
+  matched = (existing_count <= expected["existing_max"])
+  checks << { name: "existing_max", expected: "<= #{expected['existing_max']}", actual: existing_count, matched: matched }
+end
+if expected.key?("existing_count")
+  matched = (existing_count == expected["existing_count"])
+  checks << { name: "existing_count", expected: expected["existing_count"], actual: existing_count, matched: matched }
+end
+
+# 7. Waived count assertions
 if expected.key?("waived_min")
   matched = (waived_count >= expected["waived_min"])
   checks << { name: "waived_min", expected: ">= #{expected['waived_min']}", actual: waived_count, matched: matched }
+end
+if expected.key?("waived_max")
+  matched = (waived_count <= expected["waived_max"])
+  checks << { name: "waived_max", expected: "<= #{expected['waived_max']}", actual: waived_count, matched: matched }
+end
+if expected.key?("waived_count")
+  matched = (waived_count == expected["waived_count"])
+  checks << { name: "waived_count", expected: expected["waived_count"], actual: waived_count, matched: matched }
+end
+
+# 8. Anti-cheating & boundary assertions
+if expected.key?("boundary_changed")
+  matched = (expected["boundary_changed"] == actual_boundary_changed)
+  checks << { name: "boundary_changed", expected: expected["boundary_changed"], actual: actual_boundary_changed, matched: matched }
+end
+if expected.key?("boundary_changed_config")
+  matched = (expected["boundary_changed_config"] == actual_boundary_config)
+  checks << { name: "boundary_changed_config", expected: expected["boundary_changed_config"], actual: actual_boundary_config, matched: matched }
+end
+if expected.key?("boundary_changed_waivers")
+  matched = (expected["boundary_changed_waivers"] == actual_boundary_waivers)
+  checks << { name: "boundary_changed_waivers", expected: expected["boundary_changed_waivers"], actual: actual_boundary_waivers, matched: matched }
+end
+if expected.key?("boundary_changed_baseline")
+  matched = (expected["boundary_changed_baseline"] == actual_boundary_baseline)
+  checks << { name: "boundary_changed_baseline", expected: expected["boundary_changed_baseline"], actual: actual_boundary_baseline, matched: matched }
+end
+if expected.key?("target_status")
+  matched = (expected["target_status"] == actual_target_status)
+  checks << { name: "target_status", expected: expected["target_status"], actual: actual_target_status, matched: matched }
+end
+
+# 9. MCP assertions
+if expected.key?("mcp_initialized")
+  matched = (expected["mcp_initialized"] == actual_mcp_init)
+  checks << { name: "mcp_initialized", expected: expected["mcp_initialized"], actual: actual_mcp_init, matched: matched }
+end
+if expected.key?("initial_gate")
+  matched = (expected["initial_gate"] == actual_initial_gate)
+  checks << { name: "initial_gate", expected: expected["initial_gate"], actual: actual_initial_gate, matched: matched }
+end
+if expected.key?("final_gate")
+  matched = (expected["final_gate"] == actual_final_gate)
+  checks << { name: "final_gate", expected: expected["final_gate"], actual: actual_final_gate, matched: matched }
 end
 
 all_matched = checks.all? { |c| c[:matched] }
@@ -116,6 +216,10 @@ observation = {
   checks: checks,
   timestamp: Time.now.utc.iso8601
 }
+
+if File.directory?("artifacts")
+  File.write("artifacts/lab-observation.json", JSON.pretty_generate(observation))
+end
 
 puts JSON.pretty_generate(observation)
 

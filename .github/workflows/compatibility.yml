@@ -30,9 +30,11 @@ jobs:
           CANDIDATE_REV=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["revision"]')
           CANDIDATE_REPO=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["repository"]')
           git clone "$CANDIDATE_REPO" /tmp/railverdict-src
-          cd /tmp/railverdict-src
-          git checkout "$CANDIDATE_REV"
-          gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          (
+            cd /tmp/railverdict-src
+            git checkout "$CANDIDATE_REV"
+            gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          )
           gem install --local /tmp/rail_verdict-candidate.gem
 
       - name: Run verification check

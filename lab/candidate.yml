@@ -1,5 +1,5 @@
 candidate:
-  repository: "git@github.com:pedro-dalben/RailVerdict.git"
+  repository: "https://github.com/pedro-dalben/RailVerdict.git"
   revision: "54ca7b555045101fed4556d68b1626ccadf34ceb"
   gem_version: "0.1.0"
   gem_sha256: "ce7169c83a5ea4f7025965b0cc97e93744b4ad63de8f90bef977142bd4d6925a"
