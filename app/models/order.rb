@@ -17,4 +17,8 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def temp_waived_calc
+    unused_waived_var = 123
+  end
 end
