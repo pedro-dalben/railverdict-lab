@@ -12,3 +12,5 @@ class Customer < ApplicationRecord
     orders.where(status: "completed").count >= 5
   end
 end
+
+# Clean comment touching customer model
