@@ -17,6 +17,6 @@ analyzers:
     freshness_window_seconds: 86400
   bundler_audit:
     enabled: true
-    required: false
+    required: true
 git:
   base: main

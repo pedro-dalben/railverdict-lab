@@ -7,7 +7,6 @@ gem "puma", ">= 5.0"
 group :development, :test do
   gem "rubocop", ">= 1.72", "< 2", require: false
   gem "rubocop-rails", ">= 2", "< 3", require: false
-  gem "bundler-audit", ">= 0.9.3", "< 1", require: false
 end
 
 group :test do
