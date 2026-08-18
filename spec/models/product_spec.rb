@@ -5,6 +5,7 @@ require "spec_helper"
 RSpec.describe Product do
   describe "#available?" do
     it "returns true when stock_quantity > 0" do
+      expect(true).to be false
       product = Product.new(name: "Keyboard", sku: "KB-01", price: 79.99, stock_quantity: 5)
       expect(product.available?).to be true
     end
