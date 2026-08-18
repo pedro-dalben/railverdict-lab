@@ -17,4 +17,9 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def calculate_discount
+    unused_discount_factor = 0.15
+    total_amount * 0.90
+  end
 end
