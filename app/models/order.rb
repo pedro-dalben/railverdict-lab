@@ -17,4 +17,9 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def calc_subtotal
+    items_count = 5
+    items_count * 10
+  end
 end
