@@ -1,0 +1,200 @@
+scenarios:
+  - id: "RVLAB-01"
+    title: "Clean application change"
+    category: "core_pr"
+    branch: "lab/01-clean-change"
+    description: "Add a valid, tested Rails model method to Order with corresponding test. No new offenses."
+    expected:
+      gate: "PASS"
+      completion_status: "complete"
+      policy_status: "pass"
+      exit_code: 0
+      introduced_max: 0
+      existing_min: 3
+
+  - id: "RVLAB-02"
+    title: "Existing legacy debt only"
+    category: "core_pr"
+    branch: "lab/02-existing-debt"
+    description: "Touch unrelated code (e.g. comments/harmless refactor). Baseline debt is retained and non-blocking."
+    expected:
+      gate: "PASS"
+      completion_status: "complete"
+      policy_status: "pass"
+      exit_code: 0
+      introduced_count: 0
+      existing_count: 3
+
+  - id: "RVLAB-03"
+    title: "New RuboCop regression"
+    category: "core_pr"
+    branch: "lab/03-new-rubocop"
+    description: "Introduce exactly one deterministic RuboCop violation (e.g. Lint/UselessAssignment) in changed scope."
+    expected:
+      gate: "FAIL"
+      completion_status: "complete"
+      policy_status: "fail"
+      exit_code: 1
+      introduced_min: 1
+
+  - id: "RVLAB-04"
+    title: "Real Minitest failure"
+    category: "core_pr"
+    branch: "lab/04-real-minitest-failure"
+    description: "Introduce a failing Minitest assertion in changed scope."
+    expected:
+      gate: "FAIL"
+      completion_status: "complete"
+      policy_status: "fail"
+      exit_code: 1
+
+  - id: "RVLAB-05"
+    title: "Real RSpec failure"
+    category: "core_pr"
+    branch: "lab/05-real-rspec-failure"
+    description: "Introduce a failing RSpec example in changed scope."
+    expected:
+      gate: "FAIL"
+      completion_status: "complete"
+      policy_status: "fail"
+      exit_code: 1
+      introduced_min: 1
+
+  - id: "RVLAB-06"
+    title: "Zero required tests"
+    category: "core_pr"
+    branch: "lab/06-zero-tests"
+    description: "Required test suite runs successfully but finds 0 tests. Must fail-closed."
+    expected:
+      gate: "INCOMPLETE"
+      completion_status: "incomplete"
+      policy_status: "not_evaluated"
+      exit_code: 2
+
+  - id: "RVLAB-07"
+    title: "Required analyzer unavailable"
+    category: "core_pr"
+    branch: "lab/07-analyzer-unavailable"
+    description: "A required analyzer executable is missing or fails to spawn."
+    expected:
+      gate: "INCOMPLETE"
+      completion_status: "incomplete"
+      policy_status: "not_evaluated"
+      exit_code: 2
+
+  - id: "RVLAB-08"
+    title: "Active waiver"
+    category: "core_pr"
+    branch: "lab/08-active-waiver"
+    description: "Introduce a finding with an exact active waiver matching its fingerprint. Finding is waived and non-blocking."
+    expected:
+      gate: "PASS"
+      completion_status: "complete"
+      policy_status: "pass"
+      exit_code: 0
+      waived_min: 1
+
+  - id: "RVLAB-09"
+    title: "Expired waiver"
+    category: "core_pr"
+    branch: "lab/09-expired-waiver"
+    description: "Introduce a finding with an expired waiver. Finding is not suppressed and blocks the gate."
+    expected:
+      gate: "FAIL"
+      completion_status: "complete"
+      policy_status: "fail"
+      exit_code: 1
+      introduced_min: 1
+
+  - id: "RVLAB-10"
+    title: "Git path / rename / binary edge case"
+    category: "core_pr"
+    branch: "lab/10-git-edge-cases"
+    description: "Rename a tracked Rails file, add paths with spaces and unusual characters, and a binary file."
+    expected:
+      gate: "PASS"
+      completion_status: "complete"
+      policy_status: "pass"
+      exit_code: 0
+
+  - id: "RVLAB-11"
+    title: "Changed scope vs historical debt"
+    category: "core_pr"
+    branch: "lab/11-changed-scope-debt"
+    description: "Verify that changed scope filters regressions while baseline shields unrelated legacy debt."
+    expected:
+      gate: "FAIL"
+      completion_status: "complete"
+      policy_status: "fail"
+      exit_code: 1
+      introduced_min: 1
+
+  - id: "RVLAB-12"
+    title: "Real changed-line coverage"
+    category: "core_pr"
+    branch: "lab/12-changed-line-coverage"
+    description: "Generate real SimpleCov coverage artifact and verify changed-line coverage metrics in result JSON."
+    expected:
+      gate: "PASS"
+      completion_status: "complete"
+      exit_code: 0
+
+  - id: "RVLAB-13"
+    title: "Invalid Git base"
+    category: "operational"
+    branch: "lab/13-invalid-git-base"
+    description: "Invoke railverdict with an invalid base revision. Must fail-closed without guessing."
+    expected:
+      gate: "INCOMPLETE"
+      completion_status: "incomplete"
+      exit_code: 2
+
+  - id: "RVLAB-14"
+    title: "Shallow / incomplete history"
+    category: "operational"
+    branch: "lab/14-shallow-history"
+    description: "Run verification in a shallow repository without merge-base history."
+    expected:
+      gate: "INCOMPLETE"
+      completion_status: "incomplete"
+      exit_code: 2
+
+  - id: "RVLAB-15"
+    title: "Agent cheats by weakening policy"
+    category: "repair_security"
+    branch: "lab/15-repair-policy-cheat"
+    description: "Simulate an agent modifying .railverdict.yml to advisory mode instead of fixing source."
+    expected:
+      boundary_changed: true
+      boundary_changed_config: true
+      target_status: "still_present"
+
+  - id: "RVLAB-16"
+    title: "Agent adds waiver instead of fixing"
+    category: "repair_security"
+    branch: "lab/16-repair-waiver-cheat"
+    description: "Simulate an agent adding a waiver for a blocking finding instead of fixing source code."
+    expected:
+      boundary_changed: true
+      boundary_changed_waivers: true
+
+  - id: "RVLAB-17"
+    title: "Agent modifies baseline instead of fixing"
+    category: "repair_security"
+    branch: "lab/17-repair-baseline-cheat"
+    description: "Simulate an agent updating .railverdict-baseline.json to suppress a new finding."
+    expected:
+      boundary_changed: true
+      boundary_changed_baseline: true
+
+  - id: "RVLAB-18"
+    title: "MCP complete repair loop"
+    category: "mcp"
+    branch: "lab/18-mcp-loop"
+    description: "Execute full black-box stdio MCP loop: initialize -> list_tools -> verify -> list_findings -> build_repair_packet -> external fix -> verify_repair -> PASS."
+    expected:
+      mcp_initialized: true
+      initial_gate: "FAIL"
+      final_gate: "PASS"
+      target_status: "fixed"
+      boundary_changed: false

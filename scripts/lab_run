@@ -1,0 +1,256 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "yaml"
+require "open3"
+require "fileutils"
+require "optparse"
+
+target_scenario = nil
+run_all = false
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: scripts/lab_run [options]"
+  opts.on("-s", "--scenario ID", "Run single scenario (e.g. RVLAB-01)") { |v| target_scenario = v }
+  opts.on("-a", "--all", "Run full scenario battery") { |v| run_all = true }
+end.parse!
+
+repo_root = File.expand_path("..", __dir__)
+manifest_path = File.join(repo_root, "lab/scenarios.yml")
+manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
+scenarios = manifest.fetch("scenarios", [])
+
+if target_scenario
+  scenarios = scenarios.select { |s| s["id"] == target_scenario }
+  if scenarios.empty?
+    $stderr.puts "Scenario not found: #{target_scenario}"
+    exit 1
+  end
+elsif !run_all
+  puts "Specify --scenario ID or --all"
+  exit 1
+end
+
+results = []
+
+scenarios.each do |scenario|
+  id = scenario["id"]
+  title = scenario["title"]
+  category = scenario["category"]
+  puts "\n========================================================"
+  puts "▶ RUNNING SCENARIO: #{id} — #{title}"
+  puts "========================================================"
+
+  artifact_dir = File.join(repo_root, "artifacts", id)
+  FileUtils.mkdir_p(artifact_dir)
+
+  start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+  # Check if a specialized scenario runner or branch exists
+  case id
+  when "RVLAB-13" # Invalid Git base
+    cmd = ["railverdict", "check", "--changed", "--base", "nonexistent-revision-sha", "--format", "json"]
+    stdout, stderr, status = Open3.capture3(*cmd, chdir: repo_root)
+  when "RVLAB-14" # Shallow history
+    shallow_dir = File.join(repo_root, "tmp/shallow_repo")
+    FileUtils.rm_rf(shallow_dir)
+    FileUtils.mkdir_p(File.dirname(shallow_dir))
+    system("git clone --depth 1 file://#{repo_root} #{shallow_dir} >/dev/null 2>&1")
+    cmd = ["railverdict", "check", "--changed", "--base", "HEAD~1", "--format", "json"]
+    stdout, stderr, status = Open3.capture3(*cmd, chdir: shallow_dir)
+    FileUtils.rm_rf(shallow_dir)
+  when "RVLAB-15" # Policy cheat
+    # Start with regression, build packet, modify config to advisory, verify repair
+    work_dir = File.join(repo_root, "tmp/work_rvlab15")
+    FileUtils.rm_rf(work_dir)
+    FileUtils.mkdir_p(File.dirname(work_dir))
+    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
+    # Add blocking rubocop issue
+    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
+    # Build packet
+    _, _, _ = Open3.capture3("railverdict", "check", chdir: work_dir)
+    # Simulate cheat: change mode to advisory
+    File.write(File.join(work_dir, ".railverdict.yml"), File.read(File.join(work_dir, ".railverdict.yml")).sub("mode: no_new_debt", "mode: advisory"))
+    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
+    FileUtils.rm_rf(work_dir)
+  when "RVLAB-16" # Waiver cheat
+    work_dir = File.join(repo_root, "tmp/work_rvlab16")
+    FileUtils.rm_rf(work_dir)
+    FileUtils.mkdir_p(File.dirname(work_dir))
+    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
+    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
+    # Simulate cheat: add waiver
+    waivers_content = {
+      "schema_version" => "1.0",
+      "waivers" => [
+        {
+          "fingerprint" => "sha256:some_fake_fingerprint",
+          "reason" => "cheating waiver",
+          "owner" => "test-agent",
+          "created_at" => "2026-08-18T00:00:00Z",
+          "expires_at" => "2027-01-01T00:00:00Z"
+        }
+      ]
+    }
+    File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waivers_content))
+    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
+    FileUtils.rm_rf(work_dir)
+  when "RVLAB-17" # Baseline cheat
+    work_dir = File.join(repo_root, "tmp/work_rvlab17")
+    FileUtils.rm_rf(work_dir)
+    FileUtils.mkdir_p(File.dirname(work_dir))
+    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
+    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
+    # Simulate cheat: rewrite baseline
+    Open3.capture3("railverdict", "baseline", "create", "--force", chdir: work_dir)
+    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
+    FileUtils.rm_rf(work_dir)
+  when "RVLAB-18" # MCP loop
+    stdout, stderr, status = Open3.capture3("ruby", File.join(repo_root, "scripts/mcp_client"), "--root", repo_root)
+    File.write(File.join(artifact_dir, "mcp-trace.log"), stdout + "\n" + stderr)
+    # Check outcome
+    duration = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(3)
+    oracle_pass = status.exitstatus == 0
+    results << { id: id, title: title, exit_code: status.exitstatus, oracle_pass: oracle_pass, duration: duration }
+    next
+  else
+    # Core PR scenarios running against current repo or worktree
+    # Check if branch exists in git
+    branch = scenario["branch"]
+    work_dir = File.join(repo_root, "tmp/work_#{id.downcase.gsub('-', '_')}")
+    FileUtils.rm_rf(work_dir)
+    FileUtils.mkdir_p(File.dirname(work_dir))
+
+    # Clone locally
+    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
+    system("git -C #{work_dir} checkout -b #{branch} >/dev/null 2>&1")
+
+    # Apply branch-specific scenario mutations
+    case id
+    when "RVLAB-01" # Clean change
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def formatted_total\n    \"$\#{sprintf('%.2f', total_amount)}\"\n  end\nend\n"))
+      File.write(File.join(work_dir, "spec/models/order_spec.rb"), "require 'spec_helper'\n\nRSpec.describe Order do\n  it 'formats total' do\n    o = Order.new(total_amount: 50.0)\n    expect(o.formatted_total).to eq('$50.00')\n  end\nend\n")
+    when "RVLAB-02" # Existing debt only
+      File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n# Harmless comment touching file\n")
+    when "RVLAB-03" # New RuboCop regression
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def calculate_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.90\n  end\nend\n"))
+    when "RVLAB-04" # Real Minitest failure
+      File.write(File.join(work_dir, "test/models/order_test.rb"), File.read(File.join(work_dir, "test/models/order_test.rb")).sub("assert @order.valid?", "assert_equal 'INVALID', @order.status"))
+    when "RVLAB-05" # Real RSpec failure
+      File.write(File.join(work_dir, "spec/models/product_spec.rb"), File.read(File.join(work_dir, "spec/models/product_spec.rb")).sub("expect(product.available?).to be true", "expect(product.available?).to be false"))
+    when "RVLAB-06" # Zero required tests
+      File.write(File.join(work_dir, "spec/models/product_spec.rb"), "require 'spec_helper'\n# Empty suite with zero examples\n")
+    when "RVLAB-07" # Required analyzer unavailable
+      # Misconfigure rubocop or dummy executable
+      File.write(File.join(work_dir, ".railverdict.yml"), File.read(File.join(work_dir, ".railverdict.yml")).sub("bundler_audit:\n    enabled: true\n    required: false", "bundler_audit:\n    enabled: true\n    required: true\n"))
+      # Remove bundler-audit executable from PATH simulation
+    when "RVLAB-08" # Active waiver
+      # Introduce a new offense
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def waived_calc\n    unused_temp = 'temp'\n    total_amount\n  end\nend\n"))
+      # Compute fingerprint and create active waiver
+      # We will compute the exact fingerprint via a dry-run
+      _, _, _ = Open3.capture3("git", "-C", work_dir, "add", ".")
+      system("git -C #{work_dir} commit -m 'scenario commit' >/dev/null 2>&1")
+      dry_stdout, _, _ = Open3.capture3("railverdict", "check", "--changed", "--base", "main", "--format", "json", chdir: work_dir)
+      dry_data = JSON.parse(dry_stdout) rescue {}
+      new_f = (dry_data["findings"] || []).find { |f| f["rule_id"] == "Lint/UselessAssignment" }
+      if new_f
+        fp = new_f["fingerprint"]
+        waiver_doc = {
+          "schema_version" => "1.0",
+          "waivers" => [
+            {
+              "fingerprint" => fp,
+              "reason" => "Approved temporary waiver for OrderHub migration",
+              "owner" => "team-lead",
+              "created_at" => "2026-08-18T00:00:00Z",
+              "expires_at" => "2027-12-31T23:59:59Z"
+            }
+          ]
+        }
+        File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver_doc))
+      end
+    when "RVLAB-09" # Expired waiver
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def expired_calc\n    unused_expired = 'expired'\n    total_amount\n  end\nend\n"))
+      _, _, _ = Open3.capture3("git", "-C", work_dir, "add", ".")
+      system("git -C #{work_dir} commit -m 'scenario commit' >/dev/null 2>&1")
+      dry_stdout, _, _ = Open3.capture3("railverdict", "check", "--changed", "--base", "main", "--format", "json", chdir: work_dir)
+      dry_data = JSON.parse(dry_stdout) rescue {}
+      new_f = (dry_data["findings"] || []).find { |f| f["rule_id"] == "Lint/UselessAssignment" }
+      if new_f
+        fp = new_f["fingerprint"]
+        waiver_doc = {
+          "schema_version" => "1.0",
+          "waivers" => [
+            {
+              "fingerprint" => fp,
+              "reason" => "Expired waiver test",
+              "owner" => "team-lead",
+              "created_at" => "2025-01-01T00:00:00Z",
+              "expires_at" => "2025-06-01T00:00:00Z"
+            }
+          ]
+        }
+        File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver_doc))
+      end
+    when "RVLAB-10" # Git edge cases: rename, spaces, brackets, binary
+      # Rename tracked file
+      system("git -C #{work_dir} mv app/models/invoice.rb app/models/billing_invoice.rb >/dev/null 2>&1")
+      # File with spaces and brackets
+      File.write(File.join(work_dir, "app/models/order [special & item].rb"), "# frozen_string_literal: true\n# Special characters path test\n")
+      # Small binary fixture
+      File.binwrite(File.join(work_dir, "app/assets/images/logo.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].pack("C*"))
+    when "RVLAB-11" # Changed scope vs historical debt
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def new_order_debt\n    unused_order_var = 999\n  end\nend\n"))
+    when "RVLAB-12" # Real changed-line coverage
+      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def covered_and_uncovered\n    x = 10\n    y = 20\n    if x > 100\n      y = 999 # uncovered branch\n    end\n    x + y\n  end\nend\n"))
+      File.write(File.join(work_dir, "spec/models/order_cov_spec.rb"), "require 'spec_helper'\n\nRSpec.describe Order do\n  it 'runs covered lines' do\n    expect(Order.new.covered_and_uncovered).to eq(30)\n  end\nend\n")
+    end
+
+    # Commit changes in work_dir
+    system("git -C #{work_dir} add . >/dev/null 2>&1")
+    system("git -C #{work_dir} commit -m 'scenario: #{id}' >/dev/null 2>&1")
+
+    cmd = ["railverdict", "check", "--changed", "--base", "main", "--format", "json"]
+    stdout, stderr, status = Open3.capture3(*cmd, chdir: work_dir)
+    FileUtils.rm_rf(work_dir)
+  end
+
+  duration = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(3)
+  exit_code = status.exitstatus
+
+  # Save artifacts
+  result_file = File.join(artifact_dir, "railverdict-result.json")
+  diag_file = File.join(artifact_dir, "railverdict-diagnostics.log")
+  File.write(result_file, stdout)
+  File.write(diag_file, stderr)
+
+  # Run Lab Oracle
+  oracle_stdout, oracle_stderr, oracle_status = Open3.capture3(
+    "ruby", File.join(repo_root, "scripts/lab_oracle"),
+    "--scenario", id,
+    "--result", result_file,
+    "--diagnostics", diag_file,
+    "--exit-code", exit_code.to_s
+  )
+
+  obs_file = File.join(artifact_dir, "lab-observation.json")
+  File.write(obs_file, oracle_stdout)
+
+  oracle_pass = (oracle_status.exitstatus == 0)
+  results << {
+    id: id,
+    title: title,
+    category: category,
+    exit_code: exit_code,
+    oracle_pass: oracle_pass,
+    duration: duration
+  }
+
+  puts "Exit code: #{exit_code} | Duration: #{duration}s | Oracle: #{oracle_pass ? '✅ PASS' : '❌ FAIL'}"
+end
+
+puts "\n========================================================"
+puts "🏁 VALIDATION RUN COMPLETED: #{results.count { |r| r[:oracle_pass] }}/#{results.length} matched expected"
+puts "========================================================"

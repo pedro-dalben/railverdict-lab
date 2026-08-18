@@ -1,0 +1,22 @@
+version: 1.3
+mode: no_new_debt
+analyzers:
+  rubocop:
+    enabled: true
+    required: true
+  minitest:
+    enabled: false
+    required: false
+  rspec:
+    enabled: true
+    required: true
+  simplecov:
+    enabled: true
+    required: false
+    coverage_path: coverage/coverage.json
+    freshness_window_seconds: 86400
+  bundler_audit:
+    enabled: true
+    required: false
+git:
+  base: main

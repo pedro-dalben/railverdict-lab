@@ -1,0 +1,117 @@
+name: RailVerdict Validation PR Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  railverdict-gate:
+    name: RailVerdict Raw Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Checkout and install RailVerdict candidate gem
+        run: |
+          CANDIDATE_REV=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["revision"]')
+          CANDIDATE_REPO=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["repository"]')
+          echo "Building candidate from $CANDIDATE_REPO at revision $CANDIDATE_REV"
+          
+          git clone "$CANDIDATE_REPO" /tmp/railverdict-src
+          cd /tmp/railverdict-src
+          git checkout "$CANDIDATE_REV"
+          gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          gem install --local /tmp/rail_verdict-candidate.gem
+          
+          echo "Installed railverdict:"
+          which railverdict
+          railverdict --version
+
+      - name: Explicit bundler-audit database refresh
+        run: |
+          bundle exec bundler-audit update || true
+
+      - name: Execute RailVerdict gate check
+        id: check
+        run: |
+          mkdir -p artifacts
+          EXIT_CODE=0
+          railverdict check \
+            --changed \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --format json > artifacts/railverdict-result.json 2> artifacts/railverdict-diagnostics.log || EXIT_CODE=$?
+          
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "RailVerdict finished with exit code: $EXIT_CODE"
+          exit $EXIT_CODE
+
+      - name: Upload check artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: railverdict-artifacts
+          path: artifacts/
+          retention-days: 7
+
+  lab-oracle:
+    name: Lab Oracle Evaluation
+    needs: railverdict-gate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Download check artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: railverdict-artifacts
+          path: artifacts/
+
+      - name: Run Lab Oracle assertion
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Evaluating Oracle for branch: $BRANCH_NAME"
+          
+          # Extract scenario ID from branch or manifest
+          SCENARIO_ID=$(ruby -ryaml -e '
+            manifest = YAML.safe_load(File.read("lab/scenarios.yml"))
+            branch = ENV["BRANCH_NAME"]
+            sc = manifest["scenarios"].find { |s| s["branch"] == branch || branch&.include?(s["id"].downcase) }
+            puts sc ? sc["id"] : "UNKNOWN"
+          ')
+          
+          echo "Identified Scenario: $SCENARIO_ID"
+          EXIT_CODE="${{ needs.railverdict-gate.outputs.exit_code }}"
+          
+          ruby scripts/lab_oracle \
+            --scenario "$SCENARIO_ID" \
+            --result artifacts/railverdict-result.json \
+            --diagnostics artifacts/railverdict-diagnostics.log \
+            --exit-code "$EXIT_CODE"
+
+      - name: Upload oracle observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-oracle-observation
+          path: artifacts/lab-observation.json
+          retention-days: 7

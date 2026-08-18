@@ -1,0 +1,97 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "yaml"
+require "fileutils"
+
+repo_root = File.expand_path("..", __dir__)
+manifest_path = File.join(repo_root, "lab/scenarios.yml")
+candidate_path = File.join(repo_root, "lab/candidate.yml")
+manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
+candidate = YAML.safe_load(File.read(candidate_path)) rescue {}
+
+scenarios = manifest.fetch("scenarios", [])
+summary_entries = []
+
+false_pass_count = 0
+false_fail_count = 0
+unexpected_incomplete_count = 0
+expected_incomplete_matched = 0
+durations = []
+
+scenarios.each do |scenario|
+  id = scenario["id"]
+  title = scenario["title"]
+  category = scenario["category"]
+  expected = scenario["expected"] || {}
+
+  obs_path = File.join(repo_root, "artifacts", id, "lab-observation.json")
+  res_path = File.join(repo_root, "artifacts", id, "railverdict-result.json")
+
+  obs = File.file?(obs_path) ? (JSON.parse(File.read(obs_path)) rescue {}) : {}
+  res = File.file?(res_path) ? (JSON.parse(File.read(res_path)) rescue {}) : {}
+
+  actual_gate = obs.dig("actual", "gate") || res.dig("gate") || "UNKNOWN"
+  actual_completion = obs.dig("actual", "completion_status") || res.dig("completion_status") || "UNKNOWN"
+  actual_exit = obs.dig("actual", "exit_code")
+  oracle_pass = obs["all_matched"] == true
+
+  expected_gate = expected["gate"] || "N/A"
+  expected_exit = expected["exit_code"] || "N/A"
+
+  # Detect false PASS
+  if (expected_gate == "FAIL" || expected_gate == "INCOMPLETE") && actual_gate == "PASS"
+    false_pass_count += 1
+  end
+
+  # Detect false FAIL
+  if expected_gate == "PASS" && actual_gate == "FAIL"
+    false_fail_count += 1
+  end
+
+  # Detect unexpected INCOMPLETE
+  if expected_gate != "INCOMPLETE" && actual_gate == "INCOMPLETE"
+    unexpected_incomplete_count += 1
+  elsif expected_gate == "INCOMPLETE" && actual_gate == "INCOMPLETE"
+    expected_incomplete_matched += 1
+  end
+
+  duration = res.dig("duration_seconds") || 0.0
+
+  summary_entries << {
+    id: id,
+    title: title,
+    category: category,
+    expected_gate: expected_gate,
+    actual_gate: actual_gate,
+    expected_exit: expected_exit,
+    actual_exit: actual_exit,
+    oracle_pass: oracle_pass,
+    duration: duration
+  }
+end
+
+# MCP summary
+mcp_file = File.join(repo_root, "artifacts/mcp/mcp-loop-result.json")
+mcp_result = File.file?(mcp_file) ? (JSON.parse(File.read(mcp_file)) rescue {}) : {}
+
+summary = {
+  candidate: candidate,
+  metrics: {
+    scenario_total: scenarios.length,
+    scenario_matched: summary_entries.count { |e| e[:oracle_pass] },
+    scenario_match_percentage: (summary_entries.count { |e| e[:oracle_pass] }.to_f / [scenarios.length, 1].max * 100).round(1),
+    false_pass_count: false_pass_count,
+    false_fail_count: false_fail_count,
+    unexpected_incomplete_count: unexpected_incomplete_count,
+    expected_incomplete_matched: expected_incomplete_matched,
+    mcp_loop_success: mcp_result["mcp_success"] == true,
+    mcp_tools_count: mcp_result["tools_count"] || 0
+  },
+  scenarios: summary_entries
+}
+
+File.write(File.join(repo_root, "artifacts/validation-summary.json"), JSON.pretty_generate(summary))
+puts "Saved validation summary to artifacts/validation-summary.json"
+puts "Metrics: #{summary[:metrics][:scenario_matched]}/#{summary[:metrics][:scenario_total]} matched. False PASS: #{false_pass_count}"

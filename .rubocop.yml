@@ -1,0 +1,58 @@
+plugins:
+  - rubocop-rails
+
+AllCops:
+  TargetRubyVersion: 3.4
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "Gemfile"
+    - "bin/**/*"
+    - "config/**/*"
+    - "db/**/*"
+    - "public/**/*"
+    - "vendor/**/*"
+    - "test/**/*"
+    - "spec/**/*"
+    - "Rakefile"
+    - "config.ru"
+
+Style/Documentation:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/StringLiterals:
+  Enabled: false
+
+Rails/UniqueValidationWithoutIndex:
+  Enabled: false
+
+Rails/HelperInstanceVariable:
+  Enabled: false
+
+Rails/StrongParametersExpect:
+  Enabled: false
+
+Rails/HttpStatusNameConsistency:
+  Enabled: false
+
+Rails/RedundantActiveRecordAllMethod:
+  Enabled: false
+
+Style/ArgumentsForwarding:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 120
+
+# The following 3 cops are enabled deterministically to flag the 3 legacy debt findings
+Lint/UselessAssignment:
+  Enabled: true
+
+Style/RedundantReturn:
+  Enabled: true
+
+Style/RedundantSelf:
+  Enabled: true

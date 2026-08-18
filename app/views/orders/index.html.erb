@@ -1,0 +1,23 @@
+<div class="orders-container">
+  <h1>Order Management</h1>
+  <table class="orders-table">
+    <thead>
+      <tr>
+        <th>Order Number</th>
+        <th>Customer</th>
+        <th>Total Amount</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @orders.each do |order| %>
+        <tr>
+          <td><%= link_to order.order_number, order_path(order) %></td>
+          <td><%= order.customer&.name %></td>
+          <td>$<%= sprintf("%.2f", order.total_amount) %></td>
+          <td><span class="badge status-<%= order.status %>"><%= order.status %></span></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

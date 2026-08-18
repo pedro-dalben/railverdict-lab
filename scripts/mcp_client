@@ -1,0 +1,211 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "open3"
+require "optparse"
+require "fileutils"
+
+repository_root = Dir.pwd
+scenario_mode = "full_repair"
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: scripts/mcp_client [options]"
+  opts.on("-r", "--root PATH", "Repository root path") { |v| repository_root = File.expand_path(v) }
+  opts.on("-m", "--mode MODE", "Mode (full_repair | negative_test)") { |v| scenario_mode = v }
+end.parse!
+
+class MCPStdioClient
+  attr_reader :stdin, :stdout, :stderr, :wait_thr
+
+  def initialize(repository_root)
+    @repository_root = repository_root
+    @msg_id = 0
+    @cmd = ["railverdict", "mcp", "serve", "--repository-root", @repository_root]
+    @stdin, @stdout, @stderr, @wait_thr = Open3.popen3(*@cmd)
+  end
+
+  def send_request(method, params = {})
+    @msg_id += 1
+    req = {
+      "jsonrpc" => "2.0",
+      "id" => @msg_id,
+      "method" => method,
+      "params" => params
+    }
+    raw = JSON.generate(req)
+    @stdin.puts(raw)
+    @stdin.flush
+
+    line = @stdout.gets
+    return nil unless line
+
+    JSON.parse(line)
+  end
+
+  def close
+    @stdin.close rescue nil
+    @stdout.close rescue nil
+    @stderr.close rescue nil
+    @wait_thr.kill rescue nil
+  end
+end
+
+puts "=== RailVerdict Lab MCP Client ==="
+puts "Repository root: #{repository_root}"
+puts "Mode: #{scenario_mode}"
+
+start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+client = MCPStdioClient.new(repository_root)
+trace = []
+
+begin
+  # 1. Initialize
+  init_res = client.send_request("initialize", {
+    "protocolVersion" => "2025-11-25",
+    "clientInfo" => { "name" => "lab-mcp-client", "version: " => "1.0.0" },
+    "capabilities" => {}
+  })
+  trace << { step: "initialize", response: init_res }
+  puts "1. Initialize response: server=#{init_res&.dig('result', 'serverInfo', 'name')} protocol=#{init_res&.dig('result', 'protocolVersion')}"
+
+  # 2. List tools
+  tools_res = client.send_request("tools/list", {})
+  tools = tools_res&.dig("result", "tools") || []
+  tool_names = tools.map { |t| t["name"] }
+  trace << { step: "tools_list", tool_names: tool_names }
+  puts "2. Tools discovered (#{tool_names.length}): #{tool_names.join(', ')}"
+
+  # Verify tool safety: confirm no write/exec/commit tools exist in inventory
+  prohibited = %w[exec write_file shell git_commit git_push baseline_update waiver_create]
+  leaked = tool_names & prohibited
+  if leaked.any?
+    puts "❌ CRITICAL SAFETY FAILURE: Found unauthorized write tools in MCP inventory: #{leaked.join(', ')}"
+    exit 1
+  else
+    puts "   Tool safety verified: 0 unauthorized write/exec tools found."
+  end
+
+  if scenario_mode == "negative_test"
+    # Negative test: analyzer unavailable -> verify -> INCOMPLETE
+    verify_res = client.send_request("tools/call", {
+      "name" => "verify",
+      "arguments" => { "changed" => false }
+    })
+    trace << { step: "negative_verify", response: verify_res }
+    content = verify_res&.dig("result", "content", 0, "text") || "{}"
+    parsed = JSON.parse(content) rescue {}
+    gate = parsed.dig("gate") || parsed.dig("result", "gate")
+    puts "Negative test verify gate: #{gate}"
+    exit(gate == "INCOMPLETE" ? 0 : 1)
+  end
+
+  # 3. Verify
+  verify_res = client.send_request("tools/call", {
+    "name" => "verify",
+    "arguments" => { "changed" => false }
+  })
+  trace << { step: "verify_initial", response: verify_res }
+  content_text = verify_res&.dig("result", "content", 0, "text") || "{}"
+  parsed_verify = JSON.parse(content_text) rescue {}
+  initial_gate = parsed_verify.dig("gate") || parsed_verify.dig("result", "gate")
+  puts "3. Initial verification gate: #{initial_gate}"
+
+  # 4. List findings
+  findings_res = client.send_request("tools/call", {
+    "name" => "list_findings",
+    "arguments" => {}
+  })
+  trace << { step: "list_findings", response: findings_res }
+  findings_text = findings_res&.dig("result", "content", 0, "text") || "{}"
+  parsed_findings = JSON.parse(findings_text) rescue {}
+  findings_list = parsed_findings.is_a?(Array) ? parsed_findings : (parsed_findings["findings"] || [])
+  puts "4. Findings listed: #{findings_list.length} finding(s)"
+
+  target_finding = findings_list.find { |f| f["blocking"] == true } || findings_list.first
+
+  if target_finding
+    finding_id = target_finding["id"]
+    fingerprint = target_finding["fingerprint"]
+    puts "   Selected target finding: #{finding_id} (#{target_finding['rule_id']} at #{target_finding.dig('location', 'path')})"
+
+    # 5. Get finding
+    get_res = client.send_request("tools/call", {
+      "name" => "get_finding",
+      "arguments" => { "id" => finding_id }
+    })
+    trace << { step: "get_finding", response: get_res }
+    puts "5. Retrieved finding details: OK"
+
+    # 6. Build repair packet
+    packet_res = client.send_request("tools/call", {
+      "name" => "build_repair_packet",
+      "arguments" => { "finding_id" => finding_id }
+    })
+    trace << { step: "build_repair_packet", response: packet_res }
+    packet_text = packet_res&.dig("result", "content", 0, "text") || "{}"
+    packet = JSON.parse(packet_text) rescue {}
+    packet_id = packet["packet_id"] || packet.dig("repair_packet", "packet_id")
+    puts "6. RepairPacket created: packet_id=#{packet_id} (size: #{packet_text.bytesize} bytes)"
+
+    # 7. External simulated edit: fix the finding in synthetic source
+    target_path = File.join(repository_root, target_finding.dig("location", "path"))
+    if File.file?(target_path)
+      puts "7. External agent fixing file: #{target_path}..."
+      original_content = File.read(target_path)
+      # Fix the 3 legacy offenses in legacy_audit_logger.rb or specific file
+      fixed_content = original_content
+        .gsub(/unused_legacy_token = .*\n/, "")
+        .gsub(/self\.format_prefix/, "format_prefix")
+        .gsub(/return formatted/, "formatted")
+
+      File.write(target_path, fixed_content)
+      puts "   File updated successfully."
+    end
+
+    # 8. Verify repair
+    verify_repair_res = client.send_request("tools/call", {
+      "name" => "verify_repair",
+      "arguments" => { "packet_id" => packet_id }
+    })
+    trace << { step: "verify_repair", response: verify_repair_res }
+    repair_result_text = verify_repair_res&.dig("result", "content", 0, "text") || "{}"
+    repair_result = JSON.parse(repair_result_text) rescue {}
+    puts "8. verify_repair outcome:"
+    puts "   - target_status: #{repair_result['target_status']}"
+    puts "   - gate: #{repair_result['gate']}"
+    puts "   - verification_boundary_changed: #{repair_result['verification_boundary_changed']}"
+    puts "   - new_blocking_findings: #{repair_result['new_blocking_findings']}"
+
+    duration = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(3)
+
+    summary = {
+      mcp_success: true,
+      protocol_version: init_res&.dig("result", "protocolVersion"),
+      server_name: init_res&.dig("result", "serverInfo", "name"),
+      tools_count: tool_names.length,
+      initial_gate: initial_gate,
+      final_gate: repair_result["gate"],
+      target_status: repair_result["target_status"],
+      verification_boundary_changed: repair_result["verification_boundary_changed"],
+      duration_seconds: duration,
+      trace: trace
+    }
+
+    # Save artifact
+    FileUtils.mkdir_p(File.join(repository_root, "artifacts/mcp"))
+    File.write(File.join(repository_root, "artifacts/mcp/mcp-loop-result.json"), JSON.pretty_generate(summary))
+
+    if repair_result["target_status"] == "fixed" && repair_result["verification_boundary_changed"] == false
+      puts "\n✅ [MCP LOOP PASS] Full repair workflow succeeded in #{duration}s!"
+      exit 0
+    else
+      puts "\n❌ [MCP LOOP FAIL] verify_repair did not return target_status=fixed"
+      exit 1
+    end
+  else
+    puts "No target finding found to repair."
+  end
+ensure
+  client.close
+end

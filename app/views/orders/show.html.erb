@@ -1,0 +1,10 @@
+<div class="order-detail">
+  <h1>Order Details: <%= @order.order_number %></h1>
+  <div class="order-info">
+    <p><strong>Customer:</strong> <%= @order.customer&.name %></p>
+    <p><strong>Email:</strong> <%= @order.customer&.email %></p>
+    <p><strong>Total:</strong> $<%= sprintf("%.2f", @order.total_amount) %></p>
+    <p><strong>Status:</strong> <%= @order.status %></p>
+  </div>
+  <p><%= link_to "Back to Orders", orders_path %></p>
+</div>

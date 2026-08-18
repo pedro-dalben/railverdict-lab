@@ -1,0 +1,131 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "yaml"
+require "optparse"
+
+scenario_id = nil
+result_json_path = nil
+diagnostics_path = nil
+exit_code_arg = nil
+base_rev = nil
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: scripts/lab_oracle [options]"
+  opts.on("-s", "--scenario ID", "Scenario ID (e.g. RVLAB-01)") { |v| scenario_id = v }
+  opts.on("-r", "--result PATH", "Path to RailVerdict result JSON") { |v| result_json_path = v }
+  opts.on("-d", "--diagnostics PATH", "Path to diagnostics log") { |v| diagnostics_path = v }
+  opts.on("-e", "--exit-code CODE", Integer, "Actual exit code") { |v| exit_code_arg = v }
+  opts.on("-b", "--base REV", "Base revision used") { |v| base_rev = v }
+end.parse!
+
+manifest_path = File.expand_path("../lab/scenarios.yml", __dir__)
+manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
+scenario = manifest.fetch("scenarios", []).find { |s| s["id"] == scenario_id }
+
+unless scenario
+  $stderr.puts "[ORACLE ERROR] Scenario not found in manifest: #{scenario_id}"
+  exit 2
+end
+
+expected = scenario.fetch("expected", {})
+actual_result = nil
+
+if result_json_path && File.file?(result_json_path)
+  begin
+    actual_result = JSON.parse(File.read(result_json_path))
+  rescue JSON::ParserError => e
+    $stderr.puts "[ORACLE ERROR] Malformed result JSON: #{e.message}"
+  end
+end
+
+actual_gate = actual_result&.dig("gate") || actual_result&.dig("result", "gate") || "UNKNOWN"
+actual_completion = actual_result&.dig("completion_status") || actual_result&.dig("result", "completion_status") || "UNKNOWN"
+actual_policy = actual_result&.dig("policy_status") || actual_result&.dig("result", "policy_status") || "UNKNOWN"
+actual_exit_code = exit_code_arg
+
+# Extract findings counts
+findings = actual_result&.dig("findings") || []
+comparison_counts = actual_result&.dig("comparison", "counts") || actual_result&.dig("result", "comparison", "counts") || {}
+introduced_count = comparison_counts["introduced"] || findings.count { |f| f["state"] == "introduced" }
+existing_count = comparison_counts["existing"] || findings.count { |f| f["state"] == "existing" }
+waived_count = comparison_counts["waived"] || findings.count { |f| f["state"] == "waived" || f["waived"] }
+
+checks = []
+
+# 1. Gate check
+if expected.key?("gate")
+  matched = (expected["gate"] == actual_gate)
+  checks << { name: "gate", expected: expected["gate"], actual: actual_gate, matched: matched }
+end
+
+# 2. Completion status check
+if expected.key?("completion_status")
+  matched = (expected["completion_status"] == actual_completion)
+  checks << { name: "completion_status", expected: expected["completion_status"], actual: actual_completion, matched: matched }
+end
+
+# 3. Policy status check
+if expected.key?("policy_status")
+  matched = (expected["policy_status"] == actual_policy)
+  checks << { name: "policy_status", expected: expected["policy_status"], actual: actual_policy, matched: matched }
+end
+
+# 4. Exit code check
+if expected.key?("exit_code") && !actual_exit_code.nil?
+  matched = (expected["exit_code"] == actual_exit_code)
+  checks << { name: "exit_code", expected: expected["exit_code"], actual: actual_exit_code, matched: matched }
+end
+
+# 5. Introduced count assertions
+if expected.key?("introduced_min")
+  matched = (introduced_count >= expected["introduced_min"])
+  checks << { name: "introduced_min", expected: ">= #{expected['introduced_min']}", actual: introduced_count, matched: matched }
+end
+if expected.key?("introduced_max")
+  matched = (introduced_count <= expected["introduced_max"])
+  checks << { name: "introduced_max", expected: "<= #{expected['introduced_max']}", actual: introduced_count, matched: matched }
+end
+if expected.key?("introduced_count")
+  matched = (introduced_count == expected["introduced_count"])
+  checks << { name: "introduced_count", expected: expected["introduced_count"], actual: introduced_count, matched: matched }
+end
+
+# 6. Waived count assertions
+if expected.key?("waived_min")
+  matched = (waived_count >= expected["waived_min"])
+  checks << { name: "waived_min", expected: ">= #{expected['waived_min']}", actual: waived_count, matched: matched }
+end
+
+all_matched = checks.all? { |c| c[:matched] }
+
+observation = {
+  scenario_id: scenario_id,
+  title: scenario["title"],
+  all_matched: all_matched,
+  actual: {
+    gate: actual_gate,
+    completion_status: actual_completion,
+    policy_status: actual_policy,
+    exit_code: actual_exit_code,
+    introduced_count: introduced_count,
+    existing_count: existing_count,
+    waived_count: waived_count
+  },
+  checks: checks,
+  timestamp: Time.now.utc.iso8601
+}
+
+puts JSON.pretty_generate(observation)
+
+if all_matched
+  puts "\n✅ [LAB ORACLE PASS] Scenario #{scenario_id} (#{scenario['title']}) matched all expectations."
+  exit 0
+else
+  $stderr.puts "\n❌ [LAB ORACLE FAIL] Scenario #{scenario_id} (#{scenario['title']}) expectation mismatch!"
+  checks.reject { |c| c[:matched] }.each do |failed|
+    $stderr.puts "   - #{failed[:name]}: expected #{failed[:expected]}, got #{failed[:actual]}"
+  end
+  exit 1
+end
