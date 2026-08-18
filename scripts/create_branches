@@ -1,0 +1,102 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "json"
+
+repo_root = File.expand_path("..", __dir__)
+
+scenarios = [
+  { branch: "lab/01-clean-change", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def formatted_order_total\n    format(\"%.2f\", total_amount)\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+  }},
+  { branch: "lab/02-existing-debt", setup: -> {
+    File.write("app/models/customer.rb", File.read("app/models/customer.rb") + "\n# Clean comment touching customer model\n")
+    system("bundle exec rspec >/dev/null 2>&1")
+  }},
+  { branch: "lab/03-new-rubocop", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def calculate_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.90\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+  }},
+  { branch: "lab/04-minitest-failure", setup: -> {
+    File.write(".railverdict.yml", File.read(".railverdict.yml").sub("minitest:\n    enabled: false\n    required: false", "minitest:\n    enabled: true\n    required: true"))
+    File.write("test/models/order_test.rb", File.read("test/models/order_test.rb").sub("assert @order.valid?", "assert_equal 'FAIL', @order.status"))
+  }},
+  { branch: "lab/05-rspec-failure", setup: -> {
+    File.write("spec/models/product_spec.rb", File.read("spec/models/product_spec.rb").sub('it "returns true when stock_quantity > 0" do', "it \"returns true when stock_quantity > 0\" do\n      expect(true).to be false"))
+  }},
+  { branch: "lab/06-zero-tests", setup: -> {
+    File.write("spec/models/product_spec.rb", "require 'spec_helper'\n# Zero examples\n")
+  }},
+  { branch: "lab/07-unavailable-analyzer", setup: -> {
+    File.write(".railverdict.yml", File.read(".railverdict.yml").sub("bundler_audit:\n    enabled: true\n    required: false", "bundler_audit:\n    enabled: true\n    required: true"))
+  }},
+  { branch: "lab/08-active-waiver", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def temp_waived_calc\n    unused_waived_var = 123\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+    waiver_doc = {
+      "schema_version" => "1.0",
+      "waivers" => [
+        {
+          "fingerprint" => "sha256:c0b8af46a5016b87b5da55c4111480c552a60b8f3f51442e2c3fa1dd5df6c1da",
+          "reason" => "Approved active waiver for OrderHub migration",
+          "owner" => "lead-architect",
+          "created_at" => "2026-08-18T00:00:00Z",
+          "expires_at" => "2027-12-31T23:59:59Z"
+        }
+      ]
+    }
+    File.write(".railverdict-waivers.json", JSON.pretty_generate(waiver_doc))
+  }},
+  { branch: "lab/09-expired-waiver", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def expired_waiver_calc\n    unused_expired_var = 456\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+    waiver_doc = {
+      "schema_version" => "1.0",
+      "waivers" => [
+        {
+          "fingerprint" => "sha256:c0b8af46a5016b87b5da55c4111480c552a60b8f3f51442e2c3fa1dd5df6c1da",
+          "reason" => "Expired waiver test",
+          "owner" => "lead-architect",
+          "created_at" => "2025-01-01T00:00:00Z",
+          "expires_at" => "2025-06-01T00:00:00Z"
+        }
+      ]
+    }
+    File.write(".railverdict-waivers.json", JSON.pretty_generate(waiver_doc))
+  }},
+  { branch: "lab/10-git-edge-cases", setup: -> {
+    system("git mv app/models/invoice.rb app/models/billing_invoice.rb >/dev/null 2>&1")
+    File.write("app/models/special_item.rb", "# frozen_string_literal: true\n\nclass SpecialItem < ApplicationRecord\nend\n")
+    File.binwrite("app/assets/images/logo.png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].pack("C*"))
+    system("bundle exec rspec >/dev/null 2>&1")
+  }},
+  { branch: "lab/11-changed-scope", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def new_debt\n    unused_var = 789\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+  }},
+  { branch: "lab/12-coverage-gate", setup: -> {
+    content = File.read("app/models/order.rb").sub(/end\s*\Z/, "\n  def calc_subtotal\n    items_count = 5\n    items_count * 10\n  end\nend\n")
+    File.write("app/models/order.rb", content)
+    system("bundle exec rspec >/dev/null 2>&1")
+  }}
+]
+
+scenarios.each do |sc|
+  branch = sc[:branch]
+  puts "Creating branch #{branch}..."
+  system("git checkout main >/dev/null 2>&1")
+  system("git checkout -B #{branch} >/dev/null 2>&1")
+  sc[:setup].call
+  system("git add . >/dev/null 2>&1")
+  system("git commit -m 'scenario: #{branch}' >/dev/null 2>&1")
+end
+
+system("git checkout main >/dev/null 2>&1")
+puts "All local scenario branches created successfully."
