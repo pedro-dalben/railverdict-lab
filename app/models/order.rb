@@ -17,4 +17,8 @@ class Order < ApplicationRecord
   def can_cancel?
     status == "pending"
   end
+
+  def new_debt
+    unused_var = 789
+  end
 end
