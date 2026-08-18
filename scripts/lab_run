@@ -141,10 +141,22 @@ scenarios.each do |scenario|
       File.write(File.join(work_dir, "spec/models/product_spec.rb"), File.read(File.join(work_dir, "spec/models/product_spec.rb")).sub("expect(product.available?).to be true", "expect(product.available?).to be false"))
     when "RVLAB-06" # Zero required tests
       File.write(File.join(work_dir, "spec/models/product_spec.rb"), "require 'spec_helper'\n# Empty suite with zero examples\n")
-    when "RVLAB-07" # Required analyzer unavailable
-      # Misconfigure rubocop or dummy executable
+    when "RVLAB-07" # Required analyzer unavailable — set required=true and remove bundler-audit from bundle
       File.write(File.join(work_dir, ".railverdict.yml"), File.read(File.join(work_dir, ".railverdict.yml")).sub("bundler_audit:\n    enabled: true\n    required: false", "bundler_audit:\n    enabled: true\n    required: true\n"))
-      # Remove bundler-audit executable from PATH simulation
+      # Make analyzer genuinely unavailable: remove bundler-audit from Gemfile and regenerate lockfile
+      gemfile_path = File.join(work_dir, "Gemfile")
+      File.write(gemfile_path, File.read(gemfile_path).gsub(/.*bundler-audit.*\n/, ""))
+      # Regenerate bundle without bundler-audit so bundle exec bundler-audit fails
+      system("bundle install --local >/dev/null 2>&1 || bundle install >/dev/null 2>&1", chdir: work_dir)
+      # RVLAB-07 precondition: assert analyzer is actually unavailable before RailVerdict runs
+      avail_stdout, avail_stderr, avail_status = Open3.capture3("bundle", "exec", "bundler-audit", "version", chdir: work_dir)
+      if avail_status.success?
+        $stderr.puts "[RVLAB-07 LAB SCENARIO SETUP FAILURE] Required analyzer 'bundler_audit' is STILL AVAILABLE — scenario precondition violated."
+        $stderr.puts "bundle exec bundler-audit version succeeded (expected failure). This is a Lab scenario-setup failure."
+        $stderr.puts "stdout: #{avail_stdout}"
+        $stderr.puts "stderr: #{avail_stderr}"
+        exit 2
+      end
     when "RVLAB-08" # Active waiver
       # Introduce a new offense
       File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def waived_calc\n    unused_temp = 'temp'\n    total_amount\n  end\nend\n"))

@@ -1,9 +1,9 @@
 candidate:
   repository: "https://github.com/pedro-dalben/RailVerdict.git"
-  revision: "54ca7b555045101fed4556d68b1626ccadf34ceb"
+  revision: "a90edb4cbd9613d90496de54098a1a42ddc7069e"
   gem_version: "0.1.0"
-  gem_sha256: "ce7169c83a5ea4f7025965b0cc97e93744b4ad63de8f90bef977142bd4d6925a"
-  frozen_at: "2026-08-18T12:46:11-03:00"
+  gem_sha256: "95b0d68271fdfa6023feea2b536624526ee4702abbe5331b7705fb6662a0b7af"
+  frozen_at: "2026-08-18T17:30:00-03:00"
 
 environment:
   ruby_version: "3.4.5"

@@ -64,6 +64,27 @@ jobs:
           }
           EOF
 
+      - name: RVLAB-07 precondition — bundler-audit must be unavailable before RailVerdict
+        if: github.head_ref == 'lab/07-unavailable-analyzer'
+        run: |
+          echo "[RVLAB-07 PRECONDITION] Verifying bundler_audit analyzer is actually unavailable before RailVerdict execution..."
+          echo "  Config requires: bundler_audit.enabled=true, required=true"
+          echo "  Expected: bundle exec bundler-audit must FAIL (analyzer genuinely unavailable)"
+          echo ""
+          if bundle exec bundler-audit version >/dev/null 2>&1; then
+            echo "::error::[RVLAB-07 LAB SCENARIO SETUP FAILURE] Required analyzer 'bundler_audit' is STILL AVAILABLE — scenario precondition violated."
+            echo "::error::bundle exec bundler-audit version succeeded, but RVLAB-07 must make it genuinely unavailable (e.g. by removing bundler-audit from the bundle / Gemfile)."
+            echo "::error::This is a Lab infrastructure / scenario-setup failure, not a RailVerdict failure."
+            echo ""
+            echo "Diagnostic:"
+            bundle exec bundler-audit version 2>&1 || true
+            bundle list 2>&1 | grep -i bundler-audit || echo "(bundler-audit not in bundle list — unexpected)"
+            exit 1
+          else
+            echo "[RVLAB-07 PRECONDITION PASS] bundle exec bundler-audit is correctly unavailable (exit non-zero)."
+            echo "Proceeding to RailVerdict execution; expected gate is INCOMPLETE / exit 2."
+          fi
+
       - name: Explicit bundler-audit database refresh
         run: |
           bundle exec bundler-audit update || true
