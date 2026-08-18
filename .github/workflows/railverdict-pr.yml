@@ -43,7 +43,7 @@ jobs:
           )
           
           BUILT_SHA=$(sha256sum /tmp/rail_verdict-candidate.gem | awk '{print $1}')
-          gem install --local /tmp/rail_verdict-candidate.gem
+          gem install /tmp/rail_verdict-candidate.gem
           
           echo "Installed railverdict:"
           which railverdict
