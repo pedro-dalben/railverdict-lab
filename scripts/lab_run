@@ -68,6 +68,11 @@ def resolve_candidate(root, candidate_doc, options)
     end
     if bundle_path && !bundle_path.empty?
       env["BUNDLE_PATH"] = File.expand_path(bundle_path, root)
+      bundle_ruby = Dir[File.join(env["BUNDLE_PATH"], "ruby", "*")].sort.first
+      if bundle_ruby
+        env["GEM_PATH"] = "#{bundle_ruby}:#{env.fetch("GEM_PATH", "")}"
+        env["PATH"] = "#{File.join(bundle_ruby, "bin")}:#{env.fetch("PATH")}"
+      end
     end
     command = File.join(gem_home, "bin", "railverdict")
     identity = LabSupport.identity(root, spec, command, env, verified: true, artifact_sha: actual_sha)

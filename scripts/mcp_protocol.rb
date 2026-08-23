@@ -11,7 +11,7 @@ class LabMCPClient
     @trace = []
     @next_id = 0
     @stdin, @stdout, @stderr, @wait_thread = Open3.popen3(
-      env,
+      LabSupport.fixture_env(env, repository_root),
       command,
       "mcp",
       "serve",

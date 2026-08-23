@@ -37,8 +37,8 @@ module LabSupport
     end
   end
 
-  def product_run(candidate, args, cwd:, extra_env: {})
-    env = candidate.env.merge(extra_env)
+  def fixture_env(env, cwd)
+    env = env.dup
     gemfile = File.join(cwd, "Gemfile")
     if File.file?(gemfile)
       env["BUNDLE_GEMFILE"] = gemfile
@@ -48,6 +48,11 @@ module LabSupport
         File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
       end
     end
+    env
+  end
+
+  def product_run(candidate, args, cwd:, extra_env: {})
+    env = fixture_env(candidate.env.merge(extra_env), cwd)
     run([candidate.command, *args], cwd: cwd, env: env)
   end
 
