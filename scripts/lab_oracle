@@ -2,234 +2,179 @@
 # frozen_string_literal: true
 
 require "json"
-require "yaml"
 require "optparse"
+require "yaml"
 
-scenario_id = nil
-result_json_path = nil
-diagnostics_path = nil
-exit_code_arg = nil
-base_rev = nil
+ROOT = File.expand_path("..", __dir__)
+MANIFEST = File.join(ROOT, "lab", "scenarios.yml")
 
+def lookup(value, *paths)
+  paths.each do |path|
+    current = value
+    path.each { |part| current = current.is_a?(Hash) ? current[part] || current[part.to_s] : nil }
+    return current unless current.nil?
+  end
+  nil
+end
+
+def analyzer_result(payload, name)
+  Array(payload["analyzer_results"]).find { |item| item["analyzer"] == name } || {}
+end
+
+def expected_for(scenario)
+  {
+    "gate" => scenario["expected_gate"],
+    "completion_status" => scenario["expected_completion"],
+    "exit_code" => scenario["expected_exit"]
+  }.merge(scenario["expected"] || {}).compact
+end
+
+def validate_catalog!(manifest)
+  scenarios = manifest.fetch("scenarios")
+  raise "catalog must have schema_version 2.0" unless manifest["schema_version"] == "2.0"
+  raise "catalog must have catalog_version" if manifest["catalog_version"].to_s.empty?
+  ids = scenarios.map { |scenario| scenario.fetch("id") }
+  raise "scenario IDs must be unique" unless ids.uniq.length == ids.length
+  scenarios.each do |scenario|
+    %w[id title category description setup command expected_gate expected_completion expected_exit cleanup tags].each do |key|
+      raise "#{scenario['id']} missing #{key}" unless scenario.key?(key)
+    end
+    raise "#{scenario['id']} setup must be a mapping" unless scenario["setup"].is_a?(Hash)
+    raise "#{scenario['id']} command must be a mapping" unless scenario["command"].is_a?(Hash)
+  end
+  true
+end
+
+def evaluate(scenario, actual, exit_code)
+  expected = expected_for(scenario)
+  product = actual["product_result"].is_a?(Hash) ? actual["product_result"] : actual
+  effective_exit = actual.key?("exit_code") ? actual["exit_code"] : exit_code
+  actual_gate = product["gate"] || actual["gate"] || "UNKNOWN"
+  actual_completion = product["completion_status"] || actual["completion_status"] || "UNKNOWN"
+  actual_policy = product["policy_status"] || actual["policy_status"] || "UNKNOWN"
+  checks = []
+
+  { "gate" => actual_gate, "completion_status" => actual_completion, "policy_status" => actual_policy, "exit_code" => effective_exit }.each do |key, value|
+    next unless expected.key?(key)
+    checks << { "name" => key, "expected" => expected[key], "actual" => value, "matched" => expected[key] == value }
+  end
+
+  counts = lookup(product, ["comparison", "counts"]) || {}
+  findings = Array(product["findings"])
+  counts = {
+    "introduced" => counts["introduced"] || findings.count { |item| item["state"] == "introduced" },
+    "existing" => counts["existing"] || findings.count { |item| item["state"] == "existing" },
+    "waived" => counts["waived"] || findings.count { |item| item["state"] == "waived" || item["waived"] },
+    "resolved" => counts["resolved"] || Array(lookup(product, ["comparison", "resolved"])).length
+  }
+  %w[introduced existing waived resolved].each do |key|
+    { "min" => ">=", "max" => "<=", "count" => "==" }.each do |suffix, operator|
+      expectation_key = "#{key}_#{suffix}"
+      next unless expected.key?(expectation_key)
+      value = counts[key]
+      matched = case operator
+                when ">=" then value >= expected[expectation_key]
+                when "<=" then value <= expected[expectation_key]
+                else value == expected[expectation_key]
+                end
+      checks << { "name" => expectation_key, "expected" => expected[expectation_key], "actual" => value, "matched" => matched }
+    end
+  end
+
+  if expected.key?("changed_paths_min")
+    paths = lookup(product, ["git", "changed_paths"], ["git", "changed_files"], ["git", "paths"], ["comparison", "changed_paths"], ["changed_paths"])
+    value = paths.is_a?(Array) ? paths.length : (paths.is_a?(Integer) ? paths : 0)
+    checks << { "name" => "changed_paths_min", "expected" => expected["changed_paths_min"], "actual" => value, "matched" => value >= expected["changed_paths_min"] }
+  end
+
+  if expected.key?("analyzer")
+    result = analyzer_result(product, expected["analyzer"])
+    %w[analyzer_status execution_status evidence_status].each do |key|
+      next unless expected.key?(key)
+      actual_value = result[key]
+      actual_value = result["execution_status"] if key == "analyzer_status" && actual_value.nil?
+      checks << { "name" => key, "expected" => expected[key], "actual" => actual_value, "matched" => actual_value == expected[key] }
+    end
+  end
+  if expected.key?("analyzer_status_all")
+    statuses = Array(product["analyzer_results"]).map { |item| item["execution_status"] }
+    matched = statuses.any? && statuses.all? { |status| status == expected["analyzer_status_all"] }
+    checks << { "name" => "analyzer_status_all", "expected" => expected["analyzer_status_all"], "actual" => statuses, "matched" => matched }
+  end
+  if expected.key?("decision_reason")
+    reasons = Array(product["decision_reasons"]).map { |reason| reason["code"] }
+    checks << { "name" => "decision_reason", "expected" => expected["decision_reason"], "actual" => reasons, "matched" => reasons.include?(expected["decision_reason"]) }
+  end
+  if expected.key?("quality_delta_available")
+    quality_delta = lookup(product, ["quality_delta"], ["pr", "quality_delta"])
+    available = quality_delta.is_a?(Hash) ? quality_delta["available"] : !quality_delta.nil?
+    checks << { "name" => "quality_delta_available", "expected" => expected["quality_delta_available"], "actual" => available, "matched" => available == expected["quality_delta_available"] }
+  end
+
+  special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
+  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available]
+  expected.each do |key, expectation|
+    next if ignored.include?(key)
+    next unless special.key?(key) || product.key?(key)
+    actual_value = special.key?(key) ? special[key] : product[key]
+    matched = if key == "boundary_changed" && expectation == true
+                actual_value == true || (actual_value.is_a?(Hash) && actual_value.values.any? { |value| value == true })
+              else
+                actual_value == expectation
+              end
+    checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => matched }
+  end
+
+  {
+    "scenario_id" => scenario["id"],
+    "title" => scenario["title"],
+    "all_matched" => checks.all? { |check| check["matched"] },
+    "checks" => checks,
+    "actual" => { "gate" => actual_gate, "completion_status" => actual_completion, "policy_status" => actual_policy, "exit_code" => effective_exit,
+                  "introduced_count" => counts["introduced"], "existing_count" => counts["existing"], "waived_count" => counts["waived"] }
+  }
+end
+
+options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: scripts/lab_oracle [options]"
-  opts.on("-s", "--scenario ID", "Scenario ID (e.g. RVLAB-01)") { |v| scenario_id = v }
-  opts.on("-r", "--result PATH", "Path to RailVerdict result JSON") { |v| result_json_path = v }
-  opts.on("-d", "--diagnostics PATH", "Path to diagnostics log") { |v| diagnostics_path = v }
-  opts.on("-e", "--exit-code CODE", Integer, "Actual exit code") { |v| exit_code_arg = v }
-  opts.on("-b", "--base REV", "Base revision used") { |v| base_rev = v }
+  opts.banner = "Usage: scripts/lab_oracle --scenario ID --result FILE --exit-code N"
+  opts.on("-s", "--scenario ID") { |value| options[:scenario] = value }
+  opts.on("-r", "--result FILE") { |value| options[:result] = value }
+  opts.on("-e", "--exit-code N", Integer) { |value| options[:exit_code] = value }
+  opts.on("--self-test") { options[:self_test] = true }
 end.parse!
 
-manifest_path = File.expand_path("../lab/scenarios.yml", __dir__)
-manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
-scenario = manifest.fetch("scenarios", []).find { |s| s["id"] == scenario_id }
+manifest = YAML.safe_load(File.read(MANIFEST), aliases: true)
+validate_catalog!(manifest)
 
-unless scenario
-  $stderr.puts "[ORACLE ERROR] Scenario not found in manifest: #{scenario_id}"
-  exit 2
-end
-
-expected = scenario.fetch("expected", {})
-SUPPORTED_EXPECTATION_KEYS = %w[
-  gate
-  completion_status
-  policy_status
-  exit_code
-  introduced_min
-  introduced_max
-  introduced_count
-  existing_min
-  existing_max
-  existing_count
-  waived_min
-  waived_max
-  waived_count
-  boundary_changed
-  boundary_changed_config
-  boundary_changed_waivers
-  boundary_changed_baseline
-  target_status
-  mcp_initialized
-  initial_gate
-  final_gate
-].freeze
-
-unknown_keys = expected.keys.map(&:to_s) - SUPPORTED_EXPECTATION_KEYS
-unless unknown_keys.empty?
-  $stderr.puts "[ORACLE ERROR] Scenario #{scenario_id} contains unsupported expectation key(s): #{unknown_keys.join(', ')}"
-  exit 2
+if options[:self_test]
+  scenario = { "id" => "self", "title" => "self", "expected_gate" => "INCOMPLETE", "expected_completion" => "incomplete", "expected_exit" => 2,
+               "expected" => {}, "setup" => {}, "command" => {}, "category" => "self", "description" => "self", "cleanup" => "none", "tags" => [] }
+  raise "oracle refusal self-test failed" unless evaluate(scenario, { "gate" => "INCOMPLETE", "completion_status" => "incomplete" }, 2)["all_matched"]
+  raise "oracle false-PASS self-test failed" if evaluate(scenario, { "gate" => "PASS", "completion_status" => "complete" }, 0)["all_matched"]
+  puts "oracle self-test: PASS"
+  exit 0
 end
 
-actual_result = nil
+scenario = manifest.fetch("scenarios").find { |item| item["id"] == options[:scenario] }
+abort "[ORACLE ERROR] unknown scenario #{options[:scenario]}" unless scenario
+abort "[ORACLE ERROR] result file is missing" unless options[:result] && File.file?(options[:result])
 
-if result_json_path && File.file?(result_json_path) && !File.zero?(result_json_path)
-  begin
-    actual_result = JSON.parse(File.read(result_json_path))
-  rescue JSON::ParserError => e
-    $stderr.puts "[ORACLE ERROR] Malformed result JSON: #{e.message}"
-  end
-else
-  $stderr.puts "[ORACLE WARNING] Result JSON file missing or empty: #{result_json_path}"
-end
-
-actual_gate = actual_result&.dig("gate") || actual_result&.dig("result", "gate") || "UNKNOWN"
-actual_completion = actual_result&.dig("completion_status") || actual_result&.dig("result", "completion_status") || "UNKNOWN"
-actual_policy = actual_result&.dig("policy_status") || actual_result&.dig("result", "policy_status") || "UNKNOWN"
-actual_exit_code = exit_code_arg
-
-# Extract findings counts
-findings = actual_result&.dig("findings") || []
-comparison_counts = actual_result&.dig("comparison", "counts") || actual_result&.dig("result", "comparison", "counts") || {}
-introduced_count = comparison_counts["introduced"] || findings.count { |f| f["state"] == "introduced" }
-existing_count = comparison_counts["existing"] || findings.count { |f| f["state"] == "existing" }
-waived_count = comparison_counts["waived"] || findings.count { |f| f["state"] == "waived" || f["waived"] }
-
-# Extract anti-cheating boundary & repair status
-actual_boundary_changed = actual_result&.dig("verification_boundary_changed") || actual_result&.dig("boundary_changed")
-actual_boundary_config = actual_result&.dig("boundary_details", "config_changed") || actual_result&.dig("boundary_changed_config")
-actual_boundary_waivers = actual_result&.dig("boundary_details", "waivers_changed") || actual_result&.dig("boundary_changed_waivers")
-actual_boundary_baseline = actual_result&.dig("boundary_details", "baseline_changed") || actual_result&.dig("boundary_changed_baseline")
-actual_target_status = actual_result&.dig("target_status")
-actual_mcp_init = actual_result&.dig("mcp_initialized")
-actual_initial_gate = actual_result&.dig("initial_gate")
-actual_final_gate = actual_result&.dig("final_gate")
-
-checks = []
-
-# 1. Gate check
-if expected.key?("gate")
-  matched = (expected["gate"] == actual_gate)
-  checks << { name: "gate", expected: expected["gate"], actual: actual_gate, matched: matched }
-end
-
-# 2. Completion status check
-if expected.key?("completion_status")
-  matched = (expected["completion_status"] == actual_completion)
-  checks << { name: "completion_status", expected: expected["completion_status"], actual: actual_completion, matched: matched }
-end
-
-# 3. Policy status check
-if expected.key?("policy_status")
-  matched = (expected["policy_status"] == actual_policy)
-  checks << { name: "policy_status", expected: expected["policy_status"], actual: actual_policy, matched: matched }
-end
-
-# 4. Exit code check
-if expected.key?("exit_code")
-  matched = (!actual_exit_code.nil? && expected["exit_code"] == actual_exit_code)
-  checks << { name: "exit_code", expected: expected["exit_code"], actual: actual_exit_code, matched: matched }
-end
-
-# 5. Introduced count assertions
-if expected.key?("introduced_min")
-  matched = (introduced_count >= expected["introduced_min"])
-  checks << { name: "introduced_min", expected: ">= #{expected['introduced_min']}", actual: introduced_count, matched: matched }
-end
-if expected.key?("introduced_max")
-  matched = (introduced_count <= expected["introduced_max"])
-  checks << { name: "introduced_max", expected: "<= #{expected['introduced_max']}", actual: introduced_count, matched: matched }
-end
-if expected.key?("introduced_count")
-  matched = (introduced_count == expected["introduced_count"])
-  checks << { name: "introduced_count", expected: expected["introduced_count"], actual: introduced_count, matched: matched }
-end
-
-# 6. Existing count assertions
-if expected.key?("existing_min")
-  matched = (existing_count >= expected["existing_min"])
-  checks << { name: "existing_min", expected: ">= #{expected['existing_min']}", actual: existing_count, matched: matched }
-end
-if expected.key?("existing_max")
-  matched = (existing_count <= expected["existing_max"])
-  checks << { name: "existing_max", expected: "<= #{expected['existing_max']}", actual: existing_count, matched: matched }
-end
-if expected.key?("existing_count")
-  matched = (existing_count == expected["existing_count"])
-  checks << { name: "existing_count", expected: expected["existing_count"], actual: existing_count, matched: matched }
-end
-
-# 7. Waived count assertions
-if expected.key?("waived_min")
-  matched = (waived_count >= expected["waived_min"])
-  checks << { name: "waived_min", expected: ">= #{expected['waived_min']}", actual: waived_count, matched: matched }
-end
-if expected.key?("waived_max")
-  matched = (waived_count <= expected["waived_max"])
-  checks << { name: "waived_max", expected: "<= #{expected['waived_max']}", actual: waived_count, matched: matched }
-end
-if expected.key?("waived_count")
-  matched = (waived_count == expected["waived_count"])
-  checks << { name: "waived_count", expected: expected["waived_count"], actual: waived_count, matched: matched }
-end
-
-# 8. Anti-cheating & boundary assertions
-if expected.key?("boundary_changed")
-  matched = (expected["boundary_changed"] == actual_boundary_changed)
-  checks << { name: "boundary_changed", expected: expected["boundary_changed"], actual: actual_boundary_changed, matched: matched }
-end
-if expected.key?("boundary_changed_config")
-  matched = (expected["boundary_changed_config"] == actual_boundary_config)
-  checks << { name: "boundary_changed_config", expected: expected["boundary_changed_config"], actual: actual_boundary_config, matched: matched }
-end
-if expected.key?("boundary_changed_waivers")
-  matched = (expected["boundary_changed_waivers"] == actual_boundary_waivers)
-  checks << { name: "boundary_changed_waivers", expected: expected["boundary_changed_waivers"], actual: actual_boundary_waivers, matched: matched }
-end
-if expected.key?("boundary_changed_baseline")
-  matched = (expected["boundary_changed_baseline"] == actual_boundary_baseline)
-  checks << { name: "boundary_changed_baseline", expected: expected["boundary_changed_baseline"], actual: actual_boundary_baseline, matched: matched }
-end
-if expected.key?("target_status")
-  matched = (expected["target_status"] == actual_target_status)
-  checks << { name: "target_status", expected: expected["target_status"], actual: actual_target_status, matched: matched }
-end
-
-# 9. MCP assertions
-if expected.key?("mcp_initialized")
-  matched = (expected["mcp_initialized"] == actual_mcp_init)
-  checks << { name: "mcp_initialized", expected: expected["mcp_initialized"], actual: actual_mcp_init, matched: matched }
-end
-if expected.key?("initial_gate")
-  matched = (expected["initial_gate"] == actual_initial_gate)
-  checks << { name: "initial_gate", expected: expected["initial_gate"], actual: actual_initial_gate, matched: matched }
-end
-if expected.key?("final_gate")
-  matched = (expected["final_gate"] == actual_final_gate)
-  checks << { name: "final_gate", expected: expected["final_gate"], actual: actual_final_gate, matched: matched }
-end
-
-all_matched = checks.all? { |c| c[:matched] }
-
-observation = {
-  scenario_id: scenario_id,
-  title: scenario["title"],
-  all_matched: all_matched,
-  actual: {
-    gate: actual_gate,
-    completion_status: actual_completion,
-    policy_status: actual_policy,
-    exit_code: actual_exit_code,
-    introduced_count: introduced_count,
-    existing_count: existing_count,
-    waived_count: waived_count
-  },
-  checks: checks,
-  timestamp: Time.now.utc.iso8601
-}
-
-if File.directory?("artifacts")
-  File.write("artifacts/lab-observation.json", JSON.pretty_generate(observation))
-end
-
+actual = JSON.parse(File.read(options[:result]))
+observation = evaluate(scenario, actual, options[:exit_code])
+observation["candidate"] = actual["candidate"] if actual["candidate"]
+observation["duration_seconds"] = actual["duration_seconds"] if actual["duration_seconds"]
+artifact = File.join(ROOT, "artifacts", scenario["id"], "lab-observation.json")
+File.write(artifact, JSON.pretty_generate(observation)) if File.directory?(File.dirname(artifact))
 puts JSON.pretty_generate(observation)
 
-if all_matched
-  puts "\n✅ [LAB ORACLE PASS] Scenario #{scenario_id} (#{scenario['title']}) matched all expectations."
+if observation["all_matched"]
+  puts "\n✅ [LAB ORACLE PASS] #{scenario['id']} matched the public contract."
   exit 0
-else
-  $stderr.puts "\n❌ [LAB ORACLE FAIL] Scenario #{scenario_id} (#{scenario['title']}) expectation mismatch!"
-  checks.reject { |c| c[:matched] }.each do |failed|
-    $stderr.puts "   - #{failed[:name]}: expected #{failed[:expected]}, got #{failed[:actual]}"
-  end
-  exit 1
 end
+
+$stderr.puts "\n❌ [LAB ORACLE FAIL] #{scenario['id']} did not match the public contract."
+observation["checks"].reject { |check| check["matched"] }.each do |check|
+  $stderr.puts "   - #{check['name']}: expected #{check['expected']}, got #{check['actual']}"
+end
+exit 1

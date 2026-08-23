@@ -1,268 +1,324 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "json"
-require "yaml"
-require "open3"
+require "digest"
 require "fileutils"
+require "json"
 require "optparse"
+require "tmpdir"
+require "yaml"
 
-target_scenario = nil
-run_all = false
+require_relative "lab_support"
+require_relative "mcp_protocol"
 
+ROOT = File.expand_path("..", __dir__)
+MANIFEST_PATH = File.join(ROOT, "lab", "scenarios.yml")
+CANDIDATE_PATH = File.join(ROOT, "lab", "candidate.yml")
+
+options = { all: false, use_installed: false }
 OptionParser.new do |opts|
-  opts.banner = "Usage: scripts/lab_run [options]"
-  opts.on("-s", "--scenario ID", "Run single scenario (e.g. RVLAB-01)") { |v| target_scenario = v }
-  opts.on("-a", "--all", "Run full scenario battery") { |v| run_all = true }
+  opts.banner = "Usage: scripts/lab_run --scenario ID | --category NAME | --all"
+  opts.on("-s", "--scenario ID") { |value| options[:scenario] = value }
+  opts.on("-c", "--category NAME") { |value| options[:category] = value }
+  opts.on("-a", "--all") { options[:all] = true }
+  opts.on("--artifact PATH", "Install an explicit RailVerdict .gem") { |value| options[:artifact] = File.expand_path(value) }
+  opts.on("--use-installed", "Use the installed railverdict command and record identity honestly") { options[:use_installed] = true }
 end.parse!
 
-repo_root = File.expand_path("..", __dir__)
-manifest_path = File.join(repo_root, "lab/scenarios.yml")
-manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
-scenarios = manifest.fetch("scenarios", [])
+manifest = YAML.safe_load(File.read(MANIFEST_PATH), aliases: true)
+candidate_doc = YAML.safe_load(File.read(CANDIDATE_PATH), aliases: true)
+scenarios = manifest.fetch("scenarios")
+selected = if options[:scenario]
+             scenarios.select { |scenario| scenario["id"] == options[:scenario] }
+           elsif options[:category]
+             scenarios.select { |scenario| scenario["category"] == options[:category] || Array(scenario["tags"]).include?(options[:category]) }
+           elsif options[:all]
+             scenarios
+           else
+             abort "Specify --scenario ID, --category NAME, or --all"
+           end
+abort "No matching scenarios" if selected.empty?
 
-if target_scenario
-  scenarios = scenarios.select { |s| s["id"] == target_scenario }
-  if scenarios.empty?
-    $stderr.puts "Scenario not found: #{target_scenario}"
-    exit 1
-  end
-elsif !run_all
-  puts "Specify --scenario ID or --all"
-  exit 1
+Candidate = Struct.new(:command, :env, :spec, :identity, keyword_init: true)
+
+def resolve_candidate(root, candidate_doc, options)
+  spec = candidate_doc.fetch("candidate").merge("scenario_catalog_version" => candidate_doc.fetch("catalog_version"), "capabilities" => candidate_doc.fetch("capabilities", {}))
+  return installed_candidate(root, spec) if options[:use_installed]
+
+  temp_root = Dir.mktmpdir("railverdict-lab-candidate-")
+    gem_path = options[:artifact]
+    if gem_path
+      raise "candidate artifact does not exist: #{gem_path}" unless File.file?(gem_path)
+    else
+      _stdout, stderr, status = LabSupport.run(["gem", "fetch", spec.fetch("gem_name"), "-v", spec.fetch("gem_version"), "--clear-sources", "--source", "https://rubygems.org"], cwd: temp_root)
+      raise "candidate gem fetch failed: #{stderr}" unless status.success?
+      gem_path = Dir[File.join(temp_root, "#{spec.fetch('gem_name')}-*.gem")].first
+    end
+    actual_sha = Digest::SHA256.file(gem_path).hexdigest
+    raise "candidate SHA mismatch: expected #{spec['gem_sha256']}, got #{actual_sha}" unless actual_sha == spec["gem_sha256"]
+
+    gem_home = File.join(temp_root, "gem-home")
+    _stdout, stderr, status = LabSupport.run(["gem", "install", gem_path, "--install-dir", gem_home, "--no-document"], cwd: temp_root)
+    raise "candidate gem install failed: #{stderr}" unless status.success?
+    env = { "GEM_HOME" => gem_home, "GEM_PATH" => "#{gem_home}:#{ENV.fetch("GEM_PATH", "")}", "PATH" => "#{File.join(gem_home, "bin")}:#{ENV.fetch("PATH")}" }
+    command = File.join(gem_home, "bin", "railverdict")
+    identity = LabSupport.identity(root, spec, command, env, verified: true, artifact_sha: actual_sha)
+  Candidate.new(command: command, env: env, spec: spec, identity: identity)
 end
+
+def installed_candidate(root, spec)
+  command = "railverdict"
+  _stdout, stderr, status = LabSupport.run([command, "--version"], cwd: root)
+  raise "installed railverdict is unavailable: #{stderr}" unless status.success?
+  version = _stdout.strip
+  verified = false
+  identity = LabSupport.identity(root, spec.merge("mode" => "installed", "resolution_note" => "installed command was explicitly requested; package SHA was not independently resolved"), command, {}, verified: verified)
+  Candidate.new(command: command, env: {}, spec: spec, identity: identity)
+end
+
+def command_supported?(candidate, root, command)
+  stdout, = LabSupport.product_run(candidate, ["--help"], cwd: root)
+  stdout.lines.any? { |line| line.strip.start_with?(command) }
+end
+
+def capability_supported?(candidate, scenario, root)
+  capability = scenario["capability"]
+  return true unless capability
+  declared = candidate.spec.fetch("capabilities", {})[capability]
+  return false if declared == false
+  capability != "pr_intelligence" || command_supported?(candidate, root, "pr")
+end
+
+def result_path(artifact_dir, name)
+  File.join(artifact_dir, name)
+end
+
+def parse_tool(client, name, arguments = {})
+  client.tool(name, arguments)
+end
+
+def mcp_repair(candidate, work_dir, mode)
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    init = client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    tools = client.request("tools/list")
+    verify = parse_tool(client, "verify", "changed" => false)
+    findings = parse_tool(client, "list_findings")
+    list = findings["findings"] || (findings.is_a?(Array) ? findings : [])
+    target = list.find { |finding| finding["blocking"] == true } || list.find { |finding| finding["state"] == "introduced" }
+    raise "MCP repair scenario found no target finding" unless target
+    finding_ref = target["id"] || target["fingerprint"]
+    parse_tool(client, "get_finding", "finding_ref" => finding_ref)
+    packet = parse_tool(client, "build_repair_packet", "finding_ref" => finding_ref)
+    packet_id = packet["packet_id"] || packet.dig("packet", "packet_id")
+    raise "MCP repair packet has no packet_id" unless packet_id
+
+    case mode
+    when "config"
+      config = File.read(File.join(work_dir, ".railverdict.yml"))
+      File.write(File.join(work_dir, ".railverdict.yml"), config.sub("mode: no_new_debt", "mode: advisory"))
+    when "waiver"
+      waiver = { "schema_version" => "1.0", "waivers" => [{ "fingerprint" => target["fingerprint"], "reason" => "synthetic repair bypass", "owner" => "railverdict-lab", "created_at" => "2026-01-01T00:00:00Z", "expires_at" => "2099-01-01T00:00:00Z" }] }
+      File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver))
+    when "baseline"
+      File.write(File.join(work_dir, ".railverdict-baseline.json"), JSON.generate({ "schema_version" => "1.0", "entries" => [] }))
+    when "fix"
+      path = File.join(work_dir, target.dig("location", "path").to_s)
+      content = File.read(path)
+      content = content.sub(/\n  def bad_method\b.*?\n  end\n/m, "")
+      content = "class LegacyAuditLogger\n  def self.format_prefix\n    \"AUDIT:\"\n  end\n\n  def self.log(event_name, payload = {})\n    prefix = format_prefix\n    \"\#{prefix} \#{event_name} - \#{payload.inspect}\"\n  end\nend\n" if path.end_with?("legacy_audit_logger.rb")
+      File.write(path, content)
+    else
+      raise "unknown MCP repair mode #{mode}"
+    end
+    repair = parse_tool(client, "verify_repair", "packet_id" => packet_id)
+    boundary = repair["verification_boundary_changed"]
+    boundary_hash = boundary.is_a?(Hash) ? boundary : {}
+    {
+      "lab_result" => {
+        "mcp_initialized" => init.dig("result", "serverInfo").is_a?(Hash),
+        "initial_gate" => verify["gate"] || verify.dig("result", "gate"),
+        "final_gate" => repair["gate"] || repair.dig("result", "gate"),
+        "target_status" => repair["target_status"],
+        "boundary_changed" => boundary == true || boundary_hash.values.any? { |value| value == true },
+        "boundary_changed_config" => boundary_hash["config"] == true || repair["boundary_changed_config"] == true,
+        "boundary_changed_waivers" => boundary_hash["waivers"] == true || repair["boundary_changed_waivers"] == true,
+        "boundary_changed_baseline" => boundary_hash["baseline"] == true || repair["boundary_changed_baseline"] == true
+      },
+      "gate" => repair["gate"] || repair.dig("result", "gate") || "UNKNOWN",
+      "completion_status" => repair["completion_status"] || repair.dig("result", "completion_status") || "complete",
+      "policy_status" => repair["policy_status"] || repair.dig("result", "policy_status") || "not_evaluated",
+      "exit_code" => (repair["gate"] == "PASS" ? 0 : 1),
+      "mcp_trace" => client.trace
+    }
+  ensure
+    client.close
+  end
+end
+
+def mcp_security(candidate, root, work_dir)
+  outside = File.join(Dir.tmpdir, "railverdict-lab-outside-#{Process.pid}.json")
+  File.write(outside, '{"secret":"outside"}')
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    client.request("tools/list")
+    cases = ["../../outside.json", outside].flat_map { |path| ["baseline_path", "waiver_path"].map { |key| [key, path] } }
+    rejected = cases.all? do |key, path|
+      response = client.request("tools/call", "name" => "verify", "arguments" => { "changed" => false, key => path })
+      result = response["result"] || {}
+      text = Array(result["content"]).map { |item| item["text"].to_s }.join
+      (result["isError"] == true || result["structuredContent"].is_a?(Hash)) && !text.include?("secret")
+    end
+    valid = client.request("tools/call", "name" => "verify", "arguments" => { "changed" => false, "baseline_path" => File.join(work_dir, ".railverdict-baseline.json") })
+    valid_ok = valid.dig("result", "isError") != true
+    { "lab_result" => { "containment_pass" => rejected && valid_ok }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+  ensure
+    client.close
+    FileUtils.rm_f(outside)
+  end
+end
+
+def bootstrap(candidate, work_dir)
+  first, = LabSupport.product_run(candidate, ["check", "--format", "json"], cwd: work_dir)
+  first_json = LabSupport.json(first)
+  baseline_out, = LabSupport.product_run(candidate, ["baseline", "create"], cwd: work_dir)
+  baseline_ok = File.file?(File.join(work_dir, ".railverdict-baseline.json")) && !baseline_out.empty?
+  second, = LabSupport.product_run(candidate, ["check", "--format", "json"], cwd: work_dir)
+  second_json = LabSupport.json(second)
+  LabSupport.write_file(work_dir, "b.rb", "y = 'new regression'\n")
+  third, _, third_status = LabSupport.product_run(candidate, ["check", "--format", "json"], cwd: work_dir)
+  third_json = LabSupport.json(third)
+  pass = first_json["completion_status"] == "incomplete" && first_json.fetch("decision_reasons", []).any? { |reason| reason["code"] == "baseline_required" } && baseline_ok && second_json["gate"] != "FAIL" && third_json["gate"] == "FAIL" && third_status.exitstatus == 1
+  { "lab_result" => { "bootstrap_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0,
+    "bootstrap_steps" => { "first" => first_json, "after_baseline" => second_json, "after_regression" => third_json } }
+end
+
+def package_surface(candidate, root)
+  Dir.mktmpdir("railverdict-package-") do |dir|
+    LabSupport.fresh_fixture(dir)
+    version, _, version_status = LabSupport.product_run(candidate, ["--version"], cwd: dir)
+    help, _, help_status = LabSupport.product_run(candidate, ["--help"], cwd: dir)
+    _init, _, init_status = LabSupport.product_run(candidate, ["init"], cwd: dir)
+    _doctor, _, doctor_status = LabSupport.product_run(candidate, ["doctor", "--format", "json"], cwd: dir)
+    check, _, check_status = LabSupport.product_run(candidate, ["check", "--format", "json"], cwd: dir)
+    parsed = LabSupport.json(check)
+    pass = version_status.success? && version.include?(candidate.spec.fetch("gem_version")) && help_status.success? && help.include?("check") && init_status.success? && doctor_status.success? && (check_status.exitstatus == 0 || parsed["gate"] == "INCOMPLETE")
+    { "lab_result" => { "package_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  end
+end
+
+def determinism(candidate, work_dir)
+  args = ["check", "--format", "json"]
+  first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+  second, _, second_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+  first_json = LabSupport.json(first)
+  second_json = LabSupport.json(second)
+  pass = first_status.success? && second_status.success? && LabSupport.canonical(first_json) == LabSupport.canonical(second_json)
+  { "lab_result" => { "determinism_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def mcp_freshness(candidate, work_dir)
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    client.request("tools/list")
+    first = parse_tool(client, "verify", "changed" => false)
+    LabSupport.write_file(work_dir, "tmp/lab_untracked.rb", "def lab_untracked\n  unused_value = 1\n  42\nend\n")
+    second = parse_tool(client, "verify", "changed" => false)
+    LabSupport.write_file(work_dir, "tmp/lab_untracked.rb", "def lab_untracked\n  42\nend\n")
+    third = parse_tool(client, "verify", "changed" => false)
+    first_count = Array(first["findings"]).length
+    second_count = Array(second["findings"]).length
+    third_count = Array(third["findings"]).length
+    pass = second_count > first_count && third_count < second_count
+    { "lab_result" => { "cache_freshness_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+  ensure
+    client.close
+  end
+end
+
+def shallow_fixture(root, work_dir)
+  FileUtils.rm_rf(work_dir)
+  FileUtils.mkdir_p(File.dirname(work_dir))
+  _stdout, stderr, status = LabSupport.run(["git", "clone", "--quiet", "--depth", "1", "file://#{root}", work_dir], cwd: root)
+  raise "shallow clone failed: #{stderr}" unless status.success?
+end
+
+candidate = resolve_candidate(ROOT, candidate_doc, options)
+FileUtils.mkdir_p(File.join(ROOT, "artifacts"))
+File.write(File.join(ROOT, "artifacts", "candidate-identity.json"), JSON.pretty_generate(candidate.identity))
 
 results = []
-
-scenarios.each do |scenario|
-  id = scenario["id"]
-  title = scenario["title"]
-  category = scenario["category"]
-  puts "\n========================================================"
-  puts "▶ RUNNING SCENARIO: #{id} — #{title}"
-  puts "========================================================"
-
-  artifact_dir = File.join(repo_root, "artifacts", id)
+selected.each do |scenario|
+  id = scenario.fetch("id")
+  artifact_dir = File.join(ROOT, "artifacts", id)
+  FileUtils.rm_rf(artifact_dir)
   FileUtils.mkdir_p(artifact_dir)
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  command = scenario.fetch("command")
 
-  start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
-  # Check if a specialized scenario runner or branch exists
-  case id
-  when "RVLAB-13" # Invalid Git base
-    cmd = ["railverdict", "check", "--changed", "--base", "nonexistent-revision-sha", "--format", "json"]
-    stdout, stderr, status = Open3.capture3(*cmd, chdir: repo_root)
-  when "RVLAB-14" # Shallow history
-    shallow_dir = File.join(repo_root, "tmp/shallow_repo")
-    FileUtils.rm_rf(shallow_dir)
-    FileUtils.mkdir_p(File.dirname(shallow_dir))
-    system("git clone --depth 1 file://#{repo_root} #{shallow_dir} >/dev/null 2>&1")
-    cmd = ["railverdict", "check", "--changed", "--base", "HEAD~1", "--format", "json"]
-    stdout, stderr, status = Open3.capture3(*cmd, chdir: shallow_dir)
-    FileUtils.rm_rf(shallow_dir)
-  when "RVLAB-15" # Policy cheat
-    # Start with regression, build packet, modify config to advisory, verify repair
-    work_dir = File.join(repo_root, "tmp/work_rvlab15")
-    FileUtils.rm_rf(work_dir)
-    FileUtils.mkdir_p(File.dirname(work_dir))
-    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
-    # Add blocking rubocop issue
-    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
-    # Build packet
-    _, _, _ = Open3.capture3("railverdict", "check", chdir: work_dir)
-    # Simulate cheat: change mode to advisory
-    File.write(File.join(work_dir, ".railverdict.yml"), File.read(File.join(work_dir, ".railverdict.yml")).sub("mode: no_new_debt", "mode: advisory"))
-    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
-    FileUtils.rm_rf(work_dir)
-  when "RVLAB-16" # Waiver cheat
-    work_dir = File.join(repo_root, "tmp/work_rvlab16")
-    FileUtils.rm_rf(work_dir)
-    FileUtils.mkdir_p(File.dirname(work_dir))
-    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
-    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
-    # Simulate cheat: add waiver
-    waivers_content = {
-      "schema_version" => "1.0",
-      "waivers" => [
-        {
-          "fingerprint" => "sha256:some_fake_fingerprint",
-          "reason" => "cheating waiver",
-          "owner" => "test-agent",
-          "created_at" => "2026-08-18T00:00:00Z",
-          "expires_at" => "2027-01-01T00:00:00Z"
-        }
-      ]
-    }
-    File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waivers_content))
-    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
-    FileUtils.rm_rf(work_dir)
-  when "RVLAB-17" # Baseline cheat
-    work_dir = File.join(repo_root, "tmp/work_rvlab17")
-    FileUtils.rm_rf(work_dir)
-    FileUtils.mkdir_p(File.dirname(work_dir))
-    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
-    File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n  def bad_method\n    unused_var = 123\n  end\n")
-    # Simulate cheat: rewrite baseline
-    Open3.capture3("railverdict", "baseline", "create", "--force", chdir: work_dir)
-    stdout, stderr, status = Open3.capture3("railverdict", "check", "--format", "json", chdir: work_dir)
-    FileUtils.rm_rf(work_dir)
-  when "RVLAB-18" # MCP loop
-    stdout, stderr, status = Open3.capture3("ruby", File.join(repo_root, "scripts/mcp_client"), "--root", repo_root)
-    File.write(File.join(artifact_dir, "mcp-trace.log"), stdout + "\n" + stderr)
-    # Check outcome
-    duration = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(3)
-    oracle_pass = status.exitstatus == 0
-    results << { id: id, title: title, exit_code: status.exitstatus, oracle_pass: oracle_pass, duration: duration }
+  if scenario["skip_if_unsupported"] && !capability_supported?(candidate, scenario, ROOT)
+    skipped = { "scenario_id" => id, "title" => scenario["title"], "status" => "SKIPPED", "reason" => "candidate capability is not publicly available", "candidate" => candidate.identity }
+    File.write(result_path(artifact_dir, "observed.json"), JSON.pretty_generate(skipped))
+    results << { "id" => id, "category" => scenario["category"], "status" => "SKIPPED", "duration_seconds" => 0.0 }
     next
-  else
-    # Core PR scenarios running against current repo or worktree
-    # Check if branch exists in git
-    branch = scenario["branch"]
-    work_dir = File.join(repo_root, "tmp/work_#{id.downcase.gsub('-', '_')}")
-    FileUtils.rm_rf(work_dir)
-    FileUtils.mkdir_p(File.dirname(work_dir))
-
-    # Clone locally
-    system("git clone file://#{repo_root} #{work_dir} >/dev/null 2>&1")
-    system("git -C #{work_dir} checkout -b #{branch} >/dev/null 2>&1")
-
-    # Apply branch-specific scenario mutations
-    case id
-    when "RVLAB-01" # Clean change
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def formatted_total\n    \"$\#{sprintf('%.2f', total_amount)}\"\n  end\nend\n"))
-      File.write(File.join(work_dir, "spec/models/order_spec.rb"), "require 'spec_helper'\n\nRSpec.describe Order do\n  it 'formats total' do\n    o = Order.new(total_amount: 50.0)\n    expect(o.formatted_total).to eq('$50.00')\n  end\nend\n")
-    when "RVLAB-02" # Existing debt only
-      File.write(File.join(work_dir, "app/models/customer.rb"), File.read(File.join(work_dir, "app/models/customer.rb")) + "\n# Harmless comment touching file\n")
-    when "RVLAB-03" # New RuboCop regression
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def calculate_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.90\n  end\nend\n"))
-    when "RVLAB-04" # Real Minitest failure
-      File.write(File.join(work_dir, "test/models/order_test.rb"), File.read(File.join(work_dir, "test/models/order_test.rb")).sub("assert @order.valid?", "assert_equal 'INVALID', @order.status"))
-    when "RVLAB-05" # Real RSpec failure
-      File.write(File.join(work_dir, "spec/models/product_spec.rb"), File.read(File.join(work_dir, "spec/models/product_spec.rb")).sub("expect(product.available?).to be true", "expect(product.available?).to be false"))
-    when "RVLAB-06" # Zero required tests
-      File.write(File.join(work_dir, "spec/models/product_spec.rb"), "require 'spec_helper'\n# Empty suite with zero examples\n")
-    when "RVLAB-07" # Required analyzer unavailable — set required=true and remove bundler-audit from bundle
-      File.write(File.join(work_dir, ".railverdict.yml"), File.read(File.join(work_dir, ".railverdict.yml")).sub("bundler_audit:\n    enabled: true\n    required: false", "bundler_audit:\n    enabled: true\n    required: true\n"))
-      # Make analyzer genuinely unavailable: remove bundler-audit from Gemfile and regenerate lockfile
-      gemfile_path = File.join(work_dir, "Gemfile")
-      File.write(gemfile_path, File.read(gemfile_path).gsub(/.*bundler-audit.*\n/, ""))
-      # Regenerate bundle without bundler-audit so bundle exec bundler-audit fails
-      system("bundle install --local >/dev/null 2>&1 || bundle install >/dev/null 2>&1", chdir: work_dir)
-      # RVLAB-07 precondition: assert analyzer is actually unavailable before RailVerdict runs
-      avail_stdout, avail_stderr, avail_status = Open3.capture3("bundle", "exec", "bundler-audit", "version", chdir: work_dir)
-      if avail_status.success?
-        $stderr.puts "[RVLAB-07 LAB SCENARIO SETUP FAILURE] Required analyzer 'bundler_audit' is STILL AVAILABLE — scenario precondition violated."
-        $stderr.puts "bundle exec bundler-audit version succeeded (expected failure). This is a Lab scenario-setup failure."
-        $stderr.puts "stdout: #{avail_stdout}"
-        $stderr.puts "stderr: #{avail_stderr}"
-        exit 2
-      end
-    when "RVLAB-08" # Active waiver
-      # Introduce a new offense
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def waived_calc\n    unused_temp = 'temp'\n    total_amount\n  end\nend\n"))
-      # Compute fingerprint and create active waiver
-      # We will compute the exact fingerprint via a dry-run
-      _, _, _ = Open3.capture3("git", "-C", work_dir, "add", ".")
-      system("git -C #{work_dir} commit -m 'scenario commit' >/dev/null 2>&1")
-      dry_stdout, _, _ = Open3.capture3("railverdict", "check", "--changed", "--base", "main", "--format", "json", chdir: work_dir)
-      dry_data = JSON.parse(dry_stdout) rescue {}
-      new_f = (dry_data["findings"] || []).find { |f| f["rule_id"] == "Lint/UselessAssignment" }
-      if new_f
-        fp = new_f["fingerprint"]
-        waiver_doc = {
-          "schema_version" => "1.0",
-          "waivers" => [
-            {
-              "fingerprint" => fp,
-              "reason" => "Approved temporary waiver for OrderHub migration",
-              "owner" => "team-lead",
-              "created_at" => "2026-08-18T00:00:00Z",
-              "expires_at" => "2027-12-31T23:59:59Z"
-            }
-          ]
-        }
-        File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver_doc))
-      end
-    when "RVLAB-09" # Expired waiver
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def expired_calc\n    unused_expired = 'expired'\n    total_amount\n  end\nend\n"))
-      _, _, _ = Open3.capture3("git", "-C", work_dir, "add", ".")
-      system("git -C #{work_dir} commit -m 'scenario commit' >/dev/null 2>&1")
-      dry_stdout, _, _ = Open3.capture3("railverdict", "check", "--changed", "--base", "main", "--format", "json", chdir: work_dir)
-      dry_data = JSON.parse(dry_stdout) rescue {}
-      new_f = (dry_data["findings"] || []).find { |f| f["rule_id"] == "Lint/UselessAssignment" }
-      if new_f
-        fp = new_f["fingerprint"]
-        waiver_doc = {
-          "schema_version" => "1.0",
-          "waivers" => [
-            {
-              "fingerprint" => fp,
-              "reason" => "Expired waiver test",
-              "owner" => "team-lead",
-              "created_at" => "2025-01-01T00:00:00Z",
-              "expires_at" => "2025-06-01T00:00:00Z"
-            }
-          ]
-        }
-        File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver_doc))
-      end
-    when "RVLAB-10" # Git edge cases: rename, spaces, brackets, binary
-      # Rename tracked file
-      system("git -C #{work_dir} mv app/models/invoice.rb app/models/billing_invoice.rb >/dev/null 2>&1")
-      # File with spaces and brackets
-      File.write(File.join(work_dir, "app/models/order [special & item].rb"), "# frozen_string_literal: true\n# Special characters path test\n")
-      # Small binary fixture
-      File.binwrite(File.join(work_dir, "app/assets/images/logo.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].pack("C*"))
-    when "RVLAB-11" # Changed scope vs historical debt
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def new_order_debt\n    unused_order_var = 999\n  end\nend\n"))
-    when "RVLAB-12" # Real changed-line coverage
-      File.write(File.join(work_dir, "app/models/order.rb"), File.read(File.join(work_dir, "app/models/order.rb")).sub("end\n", "  def covered_and_uncovered\n    x = 10\n    y = 20\n    if x > 100\n      y = 999 # uncovered branch\n    end\n    x + y\n  end\nend\n"))
-      File.write(File.join(work_dir, "spec/models/order_cov_spec.rb"), "require 'spec_helper'\n\nRSpec.describe Order do\n  it 'runs covered lines' do\n    expect(Order.new.covered_and_uncovered).to eq(30)\n  end\nend\n")
-    end
-
-    # Commit changes in work_dir
-    system("git -C #{work_dir} add . >/dev/null 2>&1")
-    system("git -C #{work_dir} commit -m 'scenario: #{id}' >/dev/null 2>&1")
-
-    cmd = ["railverdict", "check", "--changed", "--base", "main", "--format", "json"]
-    stdout, stderr, status = Open3.capture3(*cmd, chdir: work_dir)
-    FileUtils.rm_rf(work_dir)
   end
 
-  duration = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time).round(3)
-  exit_code = status.exitstatus
+  work_dir = File.join(ROOT, "tmp", "scenario-#{id.downcase.gsub(/[^a-z0-9]+/, '-')}")
+  setup = scenario.fetch("setup")
+  env = {}
+  begin
+    if setup["strategy"] == "fresh"
+      LabSupport.fresh_fixture(work_dir)
+    elsif setup["strategy"] == "shallow_clone"
+      shallow_fixture(ROOT, work_dir)
+    else
+      LabSupport.clone_fixture(ROOT, work_dir, branch: setup["branch"])
+    end
+    env = LabSupport.apply_operations(work_dir, setup.fetch("operations", []), candidate: candidate, env: env)
+    interface = command.fetch("interface")
+    observed = case interface
+               when "cli"
+                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
+                 payload = LabSupport.json(stdout)
+                 File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
+                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                 payload.merge("exit_code" => status.exitstatus)
+               when "mcp_repair"
+                 mcp_repair(candidate, work_dir, command.fetch("cheat"))
+               when "mcp_security"
+                 mcp_security(candidate, ROOT, work_dir)
+               when "mcp_freshness"
+                 mcp_freshness(candidate, work_dir)
+               when "bootstrap"
+                 bootstrap(candidate, work_dir)
+               when "package"
+                 package_surface(candidate, ROOT)
+               when "determinism"
+                 determinism(candidate, work_dir)
+               else
+                 raise "unknown scenario interface #{interface}"
+               end
+    observed["candidate"] = candidate.identity
+    observed["duration_seconds"] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(3)
+    observed_path = result_path(artifact_dir, "observed.json")
+    File.write(observed_path, JSON.pretty_generate(observed))
 
-  # Save artifacts
-  result_file = File.join(artifact_dir, "railverdict-result.json")
-  diag_file = File.join(artifact_dir, "railverdict-diagnostics.log")
-  File.write(result_file, stdout)
-  File.write(diag_file, stderr)
-
-  # Run Lab Oracle
-  oracle_stdout, oracle_stderr, oracle_status = Open3.capture3(
-    "ruby", File.join(repo_root, "scripts/lab_oracle"),
-    "--scenario", id,
-    "--result", result_file,
-    "--diagnostics", diag_file,
-    "--exit-code", exit_code.to_s
-  )
-
-  obs_file = File.join(artifact_dir, "lab-observation.json")
-  File.write(obs_file, oracle_stdout)
-
-  oracle_pass = (oracle_status.exitstatus == 0)
-  results << {
-    id: id,
-    title: title,
-    category: category,
-    exit_code: exit_code,
-    oracle_pass: oracle_pass,
-    duration: duration
-  }
-
-  puts "Exit code: #{exit_code} | Duration: #{duration}s | Oracle: #{oracle_pass ? '✅ PASS' : '❌ FAIL'}"
+    oracle_stdout, oracle_stderr, oracle_status = LabSupport.run(["ruby", File.join(ROOT, "scripts", "lab_oracle"), "--scenario", id, "--result", observed_path, "--exit-code", observed.fetch("exit_code", 1).to_s], cwd: ROOT)
+    File.write(result_path(artifact_dir, "oracle.json"), oracle_stdout)
+    File.write(result_path(artifact_dir, "oracle-diagnostics.log"), oracle_stderr)
+    results << { "id" => id, "category" => scenario["category"], "status" => oracle_status.success? ? "PASS" : "FAIL", "duration_seconds" => observed["duration_seconds"], "exit_code" => observed["exit_code"] }
+  rescue StandardError => error
+    failure = { "scenario_id" => id, "title" => scenario["title"], "status" => "BLOCKED", "error" => "#{error.class}: #{error.message}", "duration_seconds" => (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(3) }
+    File.write(result_path(artifact_dir, "runner-error.json"), JSON.pretty_generate(failure))
+    results << { "id" => id, "category" => scenario["category"], "status" => "BLOCKED", "duration_seconds" => failure["duration_seconds"], "error" => failure["error"] }
+  ensure
+    FileUtils.rm_rf(work_dir)
+  end
 end
 
-puts "\n========================================================"
-puts "🏁 VALIDATION RUN COMPLETED: #{results.count { |r| r[:oracle_pass] }}/#{results.length} matched expected"
-puts "========================================================"
+summary = { "candidate" => candidate.identity, "results" => results, "counts" => results.group_by { |result| result["status"] }.transform_values(&:length) }
+File.write(File.join(ROOT, "artifacts", "lab-run-summary.json"), JSON.pretty_generate(summary))
+puts JSON.pretty_generate(summary["counts"])
+exit(results.any? { |result| result["status"] == "BLOCKED" } ? 2 : results.any? { |result| result["status"] == "FAIL" } ? 1 : 0)

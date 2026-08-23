@@ -1,38 +1,47 @@
-# RailVerdict Lab — Real-World Validation Repository
+# RailVerdict Lab 2.0
 
-This repository is a separate, synthetic validation laboratory for the **RailVerdict** verification framework.
+RailVerdict Lab is the permanent, synthetic external validation harness for
+RailVerdict. It exercises only the user-facing gem, CLI, JSON/SARIF, MCP stdio,
+configuration, package installation, and Git behavior.
 
-> ⚠️ **IMPORTANT**: This repository contains intentionally broken branches and synthetic offenses designed to exercise merge-gate validation. **Do not merge scenario pull requests.**
+The OrderHub Rails application is intentionally realistic. Broken scenarios
+are part of the lab: they prove that RailVerdict rejects bad or unverifiable
+changes instead of manufacturing success.
 
-## Overview
-- **Domain:** OrderHub (Customers, Orders, Invoices, Products)
-- **Framework:** Ruby on Rails 8.1.3.1 on Ruby 3.4.5
-- **Verified Candidate:** RailVerdict 0.1.0 (Git SHA: `54ca7b555045101fed4556d68b1626ccadf34ceb`)
-- **Analyzers:** RuboCop, RSpec, Minitest, SimpleCov, bundler-audit
+## The important distinction
 
-## Quick Start
-```bash
-# Install dependencies
-bundle install
+The RailVerdict result and the Lab result are different:
 
-# Run verification check
-railverdict check
+    Scenario: required analyzer unavailable
+    RailVerdict: INCOMPLETE / exit 2
+    Lab: PASS, because the refusal matched the catalog contract
 
-# Run verification in changed scope against main
-railverdict check --changed --base main
+An expected RailVerdict FAIL or INCOMPLETE is a passing Lab scenario when both
+the public semantic result and process exit code match.
 
-# Run Lab Oracle on a scenario
-scripts/lab_run --scenario RVLAB-01
+## Run it
 
-# Run complete local scenario battery
-scripts/lab_run --all
+    bundle install
+    scripts/lab_run --scenario RVLAB-01
+    scripts/lab_run --category refusal
+    scripts/lab_run --category pr_intelligence
+    scripts/lab_run --all
+    scripts/lab_collect
 
-# Run MCP stdio black-box repair loop
-ruby scripts/mcp_client --root .
-```
+By default the runner fetches and installs the exact published gem declared in
+lab/candidate.yml, verifies its SHA-256, and records the candidate identity.
+For local iteration, --use-installed is available but marks package identity
+as unverified. Candidate artifact mode is available with --artifact PATH.
 
-## Documentation
-- [`docs/VALIDATION_PLAN.md`](docs/VALIDATION_PLAN.md): Full validation matrix and test plan
-- [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md): Empirical report with metrics
-- [`docs/findings/`](docs/findings/): Documented product findings and defect reproductions
-- [`lab/scenarios.yml`](lab/scenarios.yml): Machine-readable scenario catalog
+## Contract and evidence
+
+- lab/scenarios.yml is the versioned, machine-readable scenario contract.
+- scripts/lab_run orchestrates disposable Git fixtures and public processes.
+- scripts/lab_oracle checks expected completion, gate, exit, findings, and refusal semantics.
+- scripts/mcp_client and scripts/mcp_protocol.rb use MCP JSON-RPC over stdio.
+- artifacts/ contains raw public results, bounded diagnostics, and observations.
+- docs/VALIDATION_REPORT.md is generated from the latest campaign.
+- docs/findings/ records every RailVerdict defect found by the lab.
+
+The Lab must never require RailVerdict Ruby implementation classes and must
+never modify RailVerdict source.

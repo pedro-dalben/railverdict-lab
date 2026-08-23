@@ -1,42 +1,30 @@
-name: Compatibility Smoke
+name: RailVerdict Lab Compatibility
 
 on:
   workflow_dispatch:
     inputs:
       ruby_version:
-        description: "Ruby version to test"
+        description: Ruby version to test
         required: true
-        default: "3.3"
+        default: "3.4"
 
 permissions:
   contents: read
 
 jobs:
-  smoke-check:
-    name: Compatibility Smoke (Ruby ${{ github.event.inputs.ruby_version }})
+  analyzers:
+    name: Analyzer compatibility (\${{ github.event.inputs.ruby_version }})
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ github.event.inputs.ruby_version }}
           bundler-cache: true
-
-      - name: Install RailVerdict candidate
-        run: |
-          CANDIDATE_REV=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["revision"]')
-          CANDIDATE_REPO=$(ruby -ryaml -e 'puts YAML.safe_load(File.read("lab/candidate.yml"))["candidate"]["repository"]')
-          git clone "$CANDIDATE_REPO" /tmp/railverdict-src
-          (
-            cd /tmp/railverdict-src
-            git checkout "$CANDIDATE_REV"
-            gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
-          )
-          gem install /tmp/rail_verdict-candidate.gem
-
-      - name: Run verification check
-        run: |
-          railverdict check
+      - name: Run analyzer category
+        run: scripts/lab_run --category analyzers
+      - name: Generate report
+        if: always()
+        run: scripts/lab_collect
