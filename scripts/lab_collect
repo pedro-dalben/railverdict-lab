@@ -20,8 +20,13 @@ candidate = if File.file?(identity_path)
 run_path = File.join(root, "artifacts", "lab-run-summary.json")
 run_summary = File.file?(run_path) ? JSON.parse(File.read(run_path)) : { "results" => [] }
 run_results = run_summary.fetch("results", []).to_h { |result| [result["id"], result] }
+selected_scenarios = if run_results.empty?
+                       manifest.fetch("scenarios")
+                     else
+                       manifest.fetch("scenarios").select { |scenario| run_results.key?(scenario.fetch("id")) }
+                     end
 
-rows = manifest.fetch("scenarios").map do |scenario|
+rows = selected_scenarios.map do |scenario|
   id = scenario.fetch("id")
   artifact = File.join(root, "artifacts", id)
   observation_path = File.join(artifact, "lab-observation.json")
