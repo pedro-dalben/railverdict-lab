@@ -61,8 +61,13 @@ def resolve_candidate(root, candidate_doc, options)
     _stdout, stderr, status = LabSupport.run(["gem", "install", gem_path, "--install-dir", gem_home, "--no-document"], cwd: temp_root)
     raise "candidate gem install failed: #{stderr}" unless status.success?
     env = { "GEM_HOME" => gem_home, "GEM_PATH" => "#{gem_home}:#{ENV.fetch("GEM_PATH", "")}", "PATH" => "#{File.join(gem_home, "bin")}:#{ENV.fetch("PATH")}" }
-    if ENV["BUNDLE_PATH"] && !ENV["BUNDLE_PATH"].empty?
-      env["BUNDLE_PATH"] = File.expand_path(ENV["BUNDLE_PATH"], root)
+    bundle_path = ENV["BUNDLE_PATH"]
+    if (bundle_path.nil? || bundle_path.empty?) && File.file?(File.join(root, ".bundle", "config"))
+      bundle_config = YAML.safe_load(File.read(File.join(root, ".bundle", "config"))) || {}
+      bundle_path = bundle_config["BUNDLE_PATH"]
+    end
+    if bundle_path && !bundle_path.empty?
+      env["BUNDLE_PATH"] = File.expand_path(bundle_path, root)
     end
     command = File.join(gem_home, "bin", "railverdict")
     identity = LabSupport.identity(root, spec, command, env, verified: true, artifact_sha: actual_sha)

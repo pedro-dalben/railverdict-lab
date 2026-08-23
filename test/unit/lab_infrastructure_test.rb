@@ -88,6 +88,7 @@ class LabInfrastructureTest < Minitest::Test
     assert_includes source, "cli_sarif"
     assert_includes source, "explain"
     assert_includes source, "investigate"
+    assert_includes source, ".bundle"
   end
 
   def test_category_reports_are_scoped_to_the_current_run
