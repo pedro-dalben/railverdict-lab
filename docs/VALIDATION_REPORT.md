@@ -11,8 +11,8 @@ Generated from artifacts/lab-run-summary.json and per-scenario public outputs.
 
 ## Lab Identity
 
-- Lab commit: 262af109a3a099c8301c9bbe5f5d0b6ef195226c
-- Ruby: 3.4.5
+- Lab commit: e92156ef80b87ade3011a23a71604f18b8a6952e
+- Ruby: 3.4.10
 - Rails: Rails 8.1.3.1
 - Bundler: Bundler version 2.7.1
 - Scenario catalog: 2.0
@@ -44,60 +44,60 @@ SKIPPED: 5
 
 | ID | Title | Expected | Actual | Exit | Result | Runtime |
 |---|---|---|---|---:|---|---:|
-| RVLAB-01 | Clean model behavior with a matching test | PASS/0 | PASS | 0 | PASS | 4.112s |
-| RVLAB-02 | Historical debt remains non-blocking | PASS/0 | PASS | 0 | PASS | 4.079s |
-| RVLAB-03 | New RuboCop offense is rejected | FAIL/1 | FAIL | 1 | PASS | 4.116s |
-| RVLAB-04 | Real Minitest failure | FAIL/1 | FAIL | 1 | PASS | 7.316s |
-| RVLAB-05 | Real RSpec failure | FAIL/1 | FAIL | 1 | PASS | 4.088s |
-| RVLAB-06 | Required test suite with zero tests | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.156s |
-| RVLAB-07 | Required analyzer unavailable | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 3.85s |
-| RVLAB-08 | Active waiver is visible and non-blocking | PASS/0 | PASS | 0 | PASS | 8.21s |
-| RVLAB-09 | Expired waiver blocks the change | FAIL/1 | FAIL | 1 | PASS | 8.161s |
-| RVLAB-10 | Git paths, rename, Unicode, TAB, binary, and empty file | PASS/0 | PASS | 0 | PASS | 4.194s |
-| RVLAB-11 | New debt blocks while unrelated debt remains existing | FAIL/1 | FAIL | 1 | PASS | 4.207s |
-| RVLAB-12 | Changed-line coverage evidence | PASS/0 | PASS | 0 | PASS | 4.145s |
-| RVLAB-13 | Invalid Git base refuses success | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.218s |
-| RVLAB-14 | Shallow history without a trustworthy base | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.199s |
-| RVLAB-15 | Repair rejects policy weakening | WARN/1 | WARN | 1 | PASS | 7.914s |
-| RVLAB-16 | Repair rejects waiver injection | FAIL/1 | PASS | 0 | FAIL | 8.048s |
-| RVLAB-17 | Repair rejects baseline mutation | INCOMPLETE/1 | INCOMPLETE | 1 | PASS | 8.074s |
-| RVLAB-18 | Public MCP repair loop succeeds after a real fix | PASS/0 | PASS | 0 | PASS | 7.858s |
-| RVLAB-19 | MCP repository path containment | PASS/0 | PASS | 0 | PASS | 4.061s |
-| RVLAB-20 | No-new-debt baseline bootstrap | PASS/0 | PASS | 0 | PASS | 10.344s |
-| RVLAB-21 | MCP evidence freshness after dirty edits | PASS/0 | PASS | 0 | PASS | 15.476s |
-| RVLAB-ACCEPT-01 | Controller/request behavior with a test | PASS/0 | PASS | 0 | PASS | 4.039s |
-| RVLAB-ACCEPT-02 | Service object change | PASS/0 | PASS | 0 | PASS | 4.044s |
-| RVLAB-ACCEPT-03 | Authorization change with matching test | PASS/0 | PASS | 0 | PASS | 4.213s |
-| RVLAB-ACCEPT-04 | Migration and model adjustment | PASS/0 | PASS | 0 | PASS | 4.048s |
-| RVLAB-ACCEPT-05 | Route and controller change | PASS/0 | PASS | 0 | PASS | 4.247s |
-| RVLAB-ACCEPT-06 | Dependency-neutral refactor | PASS/0 | PASS | 0 | PASS | 4.126s |
-| RVLAB-ACCEPT-07 | Test-only improvement | PASS/0 | PASS | 0 | PASS | 4.06s |
-| RVLAB-ACCEPT-08 | Resolve existing finding | PASS/0 | PASS | 0 | PASS | 4.111s |
-| RVLAB-ACCEPT-09 | Rename/refactor preserving behavior | PASS/0 | PASS | 0 | PASS | 4.015s |
-| RVLAB-ACCEPT-10 | Healthy multi-file Rails change | PASS/0 | PASS | 0 | PASS | 4.06s |
-| RVLAB-ACCEPT-11 | Public SARIF result remains consumable | PASS/0 | PASS | 0 | PASS | 4.042s |
-| RVLAB-REFUSE-01 | Required analyzer executable missing | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.698s |
+| RVLAB-01 | Clean model behavior with a matching test | PASS/0 | PASS | 0 | PASS | 6.767s |
+| RVLAB-02 | Historical debt remains non-blocking | PASS/0 | PASS | 0 | PASS | 5.047s |
+| RVLAB-03 | New RuboCop offense is rejected | FAIL/1 | FAIL | 1 | PASS | 6.034s |
+| RVLAB-04 | Real Minitest failure | FAIL/1 | FAIL | 1 | PASS | 8.089s |
+| RVLAB-05 | Real RSpec failure | FAIL/1 | FAIL | 1 | PASS | 4.655s |
+| RVLAB-06 | Required test suite with zero tests | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 6.502s |
+| RVLAB-07 | Required analyzer unavailable | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.984s |
+| RVLAB-08 | Active waiver is visible and non-blocking | PASS/0 | PASS | 0 | PASS | 12.867s |
+| RVLAB-09 | Expired waiver blocks the change | FAIL/1 | FAIL | 1 | PASS | 11.433s |
+| RVLAB-10 | Git paths, rename, Unicode, TAB, binary, and empty file | PASS/0 | PASS | 0 | PASS | 6.118s |
+| RVLAB-11 | New debt blocks while unrelated debt remains existing | FAIL/1 | FAIL | 1 | PASS | 4.818s |
+| RVLAB-12 | Changed-line coverage evidence | PASS/0 | PASS | 0 | PASS | 5.048s |
+| RVLAB-13 | Invalid Git base refuses success | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.521s |
+| RVLAB-14 | Shallow history without a trustworthy base | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.525s |
+| RVLAB-15 | Repair rejects policy weakening | WARN/1 | WARN | 1 | PASS | 11.857s |
+| RVLAB-16 | Repair rejects waiver injection | FAIL/1 | PASS | 0 | FAIL | 11.092s |
+| RVLAB-17 | Repair rejects baseline mutation | INCOMPLETE/1 | INCOMPLETE | 1 | PASS | 10.774s |
+| RVLAB-18 | Public MCP repair loop succeeds after a real fix | PASS/0 | PASS | 0 | PASS | 10.619s |
+| RVLAB-19 | MCP repository path containment | PASS/0 | PASS | 0 | PASS | 5.503s |
+| RVLAB-20 | No-new-debt baseline bootstrap | PASS/0 | PASS | 0 | PASS | 12.365s |
+| RVLAB-21 | MCP evidence freshness after dirty edits | PASS/0 | PASS | 0 | PASS | 20.471s |
+| RVLAB-ACCEPT-01 | Controller/request behavior with a test | PASS/0 | PASS | 0 | PASS | 5.0s |
+| RVLAB-ACCEPT-02 | Service object change | PASS/0 | PASS | 0 | PASS | 4.947s |
+| RVLAB-ACCEPT-03 | Authorization change with matching test | PASS/0 | PASS | 0 | PASS | 4.953s |
+| RVLAB-ACCEPT-04 | Migration and model adjustment | PASS/0 | PASS | 0 | PASS | 4.958s |
+| RVLAB-ACCEPT-05 | Route and controller change | PASS/0 | PASS | 0 | PASS | 4.911s |
+| RVLAB-ACCEPT-06 | Dependency-neutral refactor | PASS/0 | PASS | 0 | PASS | 4.952s |
+| RVLAB-ACCEPT-07 | Test-only improvement | PASS/0 | PASS | 0 | PASS | 4.991s |
+| RVLAB-ACCEPT-08 | Resolve existing finding | PASS/0 | PASS | 0 | PASS | 4.976s |
+| RVLAB-ACCEPT-09 | Rename/refactor preserving behavior | PASS/0 | PASS | 0 | PASS | 4.965s |
+| RVLAB-ACCEPT-10 | Healthy multi-file Rails change | PASS/0 | PASS | 0 | PASS | 4.968s |
+| RVLAB-ACCEPT-11 | Public SARIF result remains consumable | PASS/0 | PASS | 0 | PASS | 4.969s |
+| RVLAB-REFUSE-01 | Required analyzer executable missing | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.842s |
 | RVLAB-REFUSE-02 | Required analyzer timeout | INCOMPLETE/2 | UNKNOWN | - | SKIPPED | 0.0s |
-| RVLAB-REFUSE-03 | Analyzer unexpected exit | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.752s |
-| RVLAB-REFUSE-04 | Analyzer signaled | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.928s |
-| RVLAB-REFUSE-05 | Malformed analyzer JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.96s |
-| RVLAB-REFUSE-06 | Analyzer output lacks required JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.943s |
-| RVLAB-REFUSE-07 | Required zero-test evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.054s |
-| RVLAB-REFUSE-08 | Invalid base in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.216s |
-| RVLAB-REFUSE-09 | Shallow history in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.205s |
-| RVLAB-REFUSE-10 | Missing required baseline | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.597s |
-| RVLAB-REFUSE-11 | Invalid baseline data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.019s |
-| RVLAB-REFUSE-12 | Invalid waiver data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.065s |
-| RVLAB-REFUSE-13 | Malformed RailVerdict configuration | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 0.281s |
-| RVLAB-REFUSE-14 | Oversized required evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.913s |
-| RVLAB-BASELINE-01 | Public baseline creation lifecycle | PASS/0 | PASS | 0 | PASS | 10.538s |
-| RVLAB-BASELINE-02 | Invalid baseline is fail-closed | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.064s |
-| RVLAB-GIT-01 | Deleted and multi-commit changed scope | PASS/0 | PASS | 0 | FAIL | 4.055s |
-| RVLAB-ANALYZER-01 | All configured analyzers available and clean | PASS/0 | PASS | 0 | PASS | 4.008s |
-| RVLAB-ANALYZER-02 | Bundler-audit public evidence | PASS/0 | PASS | 0 | PASS | 4.021s |
-| RVLAB-PACKAGE-01 | Installed package identity and CLI surface | PASS/0 | PASS | 0 | PASS | 2.451s |
-| RVLAB-DETERMINISM-01 | Repeated public JSON is deterministic | PASS/0 | PASS | 0 | FAIL | 8.067s |
-| RVLAB-MULTI-FAULT-01 | Healthy tests plus a real quality regression | FAIL/1 | FAIL | 1 | PASS | 4.145s |
+| RVLAB-REFUSE-03 | Analyzer unexpected exit | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.835s |
+| RVLAB-REFUSE-04 | Analyzer signaled | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.461s |
+| RVLAB-REFUSE-05 | Malformed analyzer JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.471s |
+| RVLAB-REFUSE-06 | Analyzer output lacks required JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.463s |
+| RVLAB-REFUSE-07 | Required zero-test evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.25s |
+| RVLAB-REFUSE-08 | Invalid base in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.521s |
+| RVLAB-REFUSE-09 | Shallow history in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.515s |
+| RVLAB-REFUSE-10 | Missing required baseline | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.821s |
+| RVLAB-REFUSE-11 | Invalid baseline data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.282s |
+| RVLAB-REFUSE-12 | Invalid waiver data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.304s |
+| RVLAB-REFUSE-13 | Malformed RailVerdict configuration | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 0.304s |
+| RVLAB-REFUSE-14 | Oversized required evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.478s |
+| RVLAB-BASELINE-01 | Public baseline creation lifecycle | PASS/0 | PASS | 0 | PASS | 12.366s |
+| RVLAB-BASELINE-02 | Invalid baseline is fail-closed | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.963s |
+| RVLAB-GIT-01 | Deleted and multi-commit changed scope | PASS/0 | PASS | 0 | FAIL | 5.286s |
+| RVLAB-ANALYZER-01 | All configured analyzers available and clean | PASS/0 | PASS | 0 | PASS | 6.895s |
+| RVLAB-ANALYZER-02 | Bundler-audit public evidence | PASS/0 | PASS | 0 | PASS | 5.703s |
+| RVLAB-PACKAGE-01 | Installed package identity and CLI surface | PASS/0 | PASS | 0 | PASS | 3.259s |
+| RVLAB-DETERMINISM-01 | Repeated public JSON is deterministic | PASS/0 | PASS | 0 | FAIL | 12.048s |
+| RVLAB-MULTI-FAULT-01 | Healthy tests plus a real quality regression | FAIL/1 | FAIL | 1 | PASS | 5.008s |
 | RVLAB-PR-01 | PR Intelligence basic report | PASS/0 | UNKNOWN | - | SKIPPED | 0.0s |
 | RVLAB-PR-02 | PR Intelligence no-baseline quality delta | PASS/0 | UNKNOWN | - | SKIPPED | 0.0s |
 | RVLAB-PR-03 | PR Intelligence preserves incomplete gate | INCOMPLETE/2 | UNKNOWN | - | SKIPPED | 0.0s |
