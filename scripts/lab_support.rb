@@ -38,7 +38,10 @@ module LabSupport
   end
 
   def product_run(candidate, args, cwd:, extra_env: {})
-    run([candidate.command, *args], cwd: cwd, env: candidate.env.merge(extra_env))
+    env = candidate.env.merge(extra_env)
+    gemfile = File.join(cwd, "Gemfile")
+    env["BUNDLE_GEMFILE"] = gemfile if File.file?(gemfile)
+    run([candidate.command, *args], cwd: cwd, env: env)
   end
 
   def clone_fixture(repo_root, work_dir, branch: nil)
