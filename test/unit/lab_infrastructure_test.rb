@@ -85,5 +85,14 @@ class LabInfrastructureTest < Minitest::Test
     assert_includes source, "--scenario ID"
     assert_includes source, "--category NAME"
     assert_includes source, "--all"
+    assert_includes source, "cli_sarif"
+    assert_includes source, "explain"
+    assert_includes source, "investigate"
+  end
+
+  def test_category_reports_are_scoped_to_the_current_run
+    source = File.read(File.join(@root, "scripts", "lab_collect"))
+    assert_includes source, "selected_scenarios"
+    assert_includes source, "run_results.key?"
   end
 end

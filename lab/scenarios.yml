@@ -441,6 +441,20 @@ scenarios:
     cleanup: "remove_worktree"
     tags: ["acceptance", "multi-file"]
 
+  - id: "RVLAB-ACCEPT-11"
+    title: "Public SARIF result remains consumable"
+    category: "acceptance"
+    description: "Run the public SARIF formatter against a real changed Rails fixture."
+    setup: { strategy: "clone", branch: "lab/accept-sarif", operations:
+      [{name: "append", path: "README.md", content: "\nSARIF acceptance marker\n"}, {name: "commit"}] }
+    command: { interface: "cli_sarif", args: ["check", "--changed", "--base", "main", "--format", "sarif"] }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { sarif_pass: true }
+    cleanup: "remove_worktree"
+    tags: ["acceptance", "sarif", "format"]
+
   - id: "RVLAB-REFUSE-01"
     title: "Required analyzer executable missing"
     category: "refusal"

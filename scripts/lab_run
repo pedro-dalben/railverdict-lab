@@ -102,6 +102,9 @@ def mcp_repair(candidate, work_dir, mode)
   begin
     init = client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
     tools = client.request("tools/list")
+    tool_names = Array(tools.dig("result", "tools")).map { |tool| tool["name"] }
+    required_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate]
+    raise "MCP tool list is missing public tools: #{required_tools - tool_names}" unless (required_tools - tool_names).empty?
     verify = parse_tool(client, "verify", "changed" => false)
     findings = parse_tool(client, "list_findings")
     list = findings["findings"] || (findings.is_a?(Array) ? findings : [])
@@ -110,6 +113,10 @@ def mcp_repair(candidate, work_dir, mode)
     finding_ref = target["id"] || target["fingerprint"]
     parse_tool(client, "get_finding", "finding_ref" => finding_ref)
     packet = parse_tool(client, "build_repair_packet", "finding_ref" => finding_ref)
+    explain = parse_tool(client, "explain", "finding_ref" => finding_ref, "preview" => true)
+    investigate = parse_tool(client, "investigate", "limit" => 1, "preview" => true)
+    raise "MCP explain preview failed" if explain["mcp_is_error"]
+    raise "MCP investigate preview failed" if investigate["mcp_is_error"]
     packet_id = packet["packet_id"] || packet.dig("packet", "packet_id")
     raise "MCP repair packet has no packet_id" unless packet_id
 
@@ -162,7 +169,10 @@ def mcp_security(candidate, root, work_dir)
   client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
   begin
     client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
-    client.request("tools/list")
+    tools_response = client.request("tools/list")
+    tool_names = Array(tools_response.dig("result", "tools")).map { |tool| tool["name"] }
+    prohibited = %w[exec shell write_file git_commit git_push baseline_update waiver_create]
+    tools_safe = (tool_names & prohibited).empty?
     cases = ["../../outside.json", outside].flat_map { |path| ["baseline_path", "waiver_path"].map { |key| [key, path] } }
     rejected = cases.all? do |key, path|
       response = client.request("tools/call", "name" => "verify", "arguments" => { "changed" => false, key => path })
@@ -172,7 +182,11 @@ def mcp_security(candidate, root, work_dir)
     end
     valid = client.request("tools/call", "name" => "verify", "arguments" => { "changed" => false, "baseline_path" => File.join(work_dir, ".railverdict-baseline.json") })
     valid_ok = valid.dig("result", "isError") != true
-    { "lab_result" => { "containment_pass" => rejected && valid_ok }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+    invalid_arguments = client.request("tools/call", "name" => "verify", "arguments" => { "changed" => false, "unexpected" => true })
+    invalid_arguments_ok = invalid_arguments.dig("result", "isError") == true
+    bounds = client.request("tools/call", "name" => "list_findings", "arguments" => { "limit" => 1000 })
+    bounds_ok = bounds.dig("result", "isError") == true
+    { "lab_result" => { "containment_pass" => tools_safe && rejected && valid_ok && invalid_arguments_ok && bounds_ok }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
   ensure
     client.close
     FileUtils.rm_f(outside)
@@ -224,14 +238,21 @@ def mcp_freshness(candidate, work_dir)
     client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
     client.request("tools/list")
     first = parse_tool(client, "verify", "changed" => false)
-    LabSupport.write_file(work_dir, "tmp/lab_untracked.rb", "def lab_untracked\n  unused_value = 1\n  42\nend\n")
+    path = "app/models/customer.rb"
+    original = File.read(File.join(work_dir, path))
+    LabSupport.write_file(work_dir, path, "#{original}\n  def lab_untracked\n    unused_first = 1\n    42\n  end\n")
     second = parse_tool(client, "verify", "changed" => false)
-    LabSupport.write_file(work_dir, "tmp/lab_untracked.rb", "def lab_untracked\n  42\nend\n")
+    second_fingerprints = Array(second["findings"]).map { |finding| finding["fingerprint"] }
+    LabSupport.write_file(work_dir, path, "#{original}\n  def lab_untracked\n    unused_second = 2\n    43\n  end\n")
     third = parse_tool(client, "verify", "changed" => false)
+    third_fingerprints = Array(third["findings"]).map { |finding| finding["fingerprint"] }
+    LabSupport.write_file(work_dir, path, original)
+    fourth = parse_tool(client, "verify", "changed" => false)
     first_count = Array(first["findings"]).length
     second_count = Array(second["findings"]).length
     third_count = Array(third["findings"]).length
-    pass = second_count > first_count && third_count < second_count
+    fourth_count = Array(fourth["findings"]).length
+    pass = second_count > first_count && third_count > first_count && second_fingerprints != third_fingerprints && fourth_count < third_count
     { "lab_result" => { "cache_freshness_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
   ensure
     client.close
@@ -285,6 +306,13 @@ selected.each do |scenario|
                  File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
                  File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
                  payload.merge("exit_code" => status.exitstatus)
+               when "cli_sarif"
+                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
+                 sarif = LabSupport.json(stdout)
+                 File.write(result_path(artifact_dir, "railverdict-result.sarif"), stdout)
+                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                 sarif_pass = status.success? && sarif["version"] == "2.1.0" && sarif["runs"].is_a?(Array) && sarif["runs"].first.dig("tool", "driver", "name") == "RailVerdict"
+                 { "lab_result" => { "sarif_pass" => sarif_pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => status.exitstatus }
                when "mcp_repair"
                  mcp_repair(candidate, work_dir, command.fetch("cheat"))
                when "mcp_security"

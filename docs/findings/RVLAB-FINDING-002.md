@@ -16,7 +16,7 @@ gem SHA256: 5a4a425ede8ea1563cca4e641e874a41b95a6f2e51eb96e759909e4f8979d3a9
 
 ## Lab Environment
 
-Lab SHA: 3d3a2c2e53caa37c44f9f7fa7d2caced89d67b22
+Lab SHA: eaff5d8a67524f354bc6008f9c271f7f7c60994d
 Ruby: 3.4.5
 Rails: 8.1.3.1
 OS: Linux x86_64

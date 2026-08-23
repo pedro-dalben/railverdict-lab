@@ -19,8 +19,9 @@ unknown scenario structure and checks semantic state plus process exit code.
 - baseline_waiver: creation, existing debt, active/expired waiver, and invalid baseline lifecycle;
 - git_changed_scope: add/delete/rename, Unicode/TAB/space paths, binary, empty files, and multiple commits;
 - analyzers: real configured analyzers and bundler-audit compatibility evidence;
-- repair_anti_cheating and mcp: public repair packets, source repair, boundary mutation, containment, and freshness;
+- repair_anti_cheating and mcp: public repair packets, source repair, boundary mutation, containment, tool firewall/bounds, explain/investigate previews, and same-file freshness;
 - package: isolated published gem installation and CLI surface;
+- format: public SARIF schema and RailVerdict driver output;
 - determinism: repeated canonical public JSON;
 - pr_intelligence: capability-gated public PR reports, never invented through MCP;
 - multi_fault: realistic combined changes.
