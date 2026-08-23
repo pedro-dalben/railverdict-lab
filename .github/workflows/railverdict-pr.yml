@@ -30,6 +30,8 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
       - name: Run category
+        env:
+          BUNDLE_PATH: ${{ github.workspace }}/vendor/bundle
         run: |
           set +e
           scripts/lab_run --category "${{ matrix.category }}"

@@ -24,6 +24,8 @@ jobs:
           ruby-version: ${{ github.event.inputs.ruby_version }}
           bundler-cache: true
       - name: Run analyzer category
+        env:
+          BUNDLE_PATH: ${{ github.workspace }}/vendor/bundle
         run: scripts/lab_run --category analyzers
       - name: Generate report
         if: always()
