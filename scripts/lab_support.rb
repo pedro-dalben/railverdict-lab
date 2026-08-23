@@ -40,7 +40,14 @@ module LabSupport
   def product_run(candidate, args, cwd:, extra_env: {})
     env = candidate.env.merge(extra_env)
     gemfile = File.join(cwd, "Gemfile")
-    env["BUNDLE_GEMFILE"] = gemfile if File.file?(gemfile)
+    if File.file?(gemfile)
+      env["BUNDLE_GEMFILE"] = gemfile
+      if env["BUNDLE_PATH"] && !env["BUNDLE_PATH"].empty?
+        bundle_config = File.join(cwd, ".bundle", "config")
+        FileUtils.mkdir_p(File.dirname(bundle_config))
+        File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
+      end
+    end
     run([candidate.command, *args], cwd: cwd, env: env)
   end
 
