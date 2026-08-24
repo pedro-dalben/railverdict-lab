@@ -29,7 +29,7 @@ class LabMCPClient
     raise "MCP server closed stdout while handling #{method}" unless line
 
     response = JSON.parse(line)
-    @trace << { "method" => method, "response" => response }
+    @trace << { "method" => method, "params" => params, "response" => response }
     response
   end
 

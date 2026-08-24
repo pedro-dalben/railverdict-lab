@@ -272,6 +272,260 @@ def mcp_freshness(candidate, work_dir)
   end
 end
 
+# ---- RailVerdict 1.2 Agent Verification Protocol scenarios ----
+
+def receipt_create(candidate, work_dir, extra_args: [], env: {})
+  stdout, stderr, status = LabSupport.product_run(candidate, ["receipt", "create", "--format", "json"] + extra_args, cwd: work_dir, extra_env: env)
+  [LabSupport.json(stdout), status.exitstatus, stdout, stderr]
+end
+
+def receipt_verify(candidate, work_dir, path, env: {})
+  stdout, _stderr, status = LabSupport.product_run(candidate, ["receipt", "verify", path, "--format", "json"], cwd: work_dir, extra_env: env)
+  [LabSupport.json(stdout), status.exitstatus]
+end
+
+def agent_receipt(candidate, work_dir, mode, env = {})
+  case mode
+  when "healthy"
+    document, create_exit, = receipt_create(candidate, work_dir, env: env)
+    raise "receipt create failed (exit #{create_exit})" unless create_exit == 0 && document["receipt_id"]
+
+    outside = File.join(Dir.tmpdir, "#{File.basename(work_dir)}-agent-01-receipt.json")
+    File.write(outside, JSON.generate(document))
+    begin
+      validation, verify_exit = receipt_verify(candidate, work_dir, outside, env: env)
+      { "lab_result" => { "receipt_created" => true, "receipt_fresh" => validation["status"] == "fresh",
+                          "receipt_gate" => document.dig("gate_projection", "gate"),
+                          "validation_status" => validation["status"] },
+        "gate" => document.dig("gate_projection", "gate"), "completion_status" => document.dig("gate_projection", "completion_status"),
+        "policy_status" => "pass", "exit_code" => verify_exit }
+    ensure
+      FileUtils.rm_f(outside)
+    end
+  when "stale_source"
+    document, = receipt_create(candidate, work_dir, env: env)
+    raise "no receipt" unless document["receipt_id"]
+
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# agent touched source after verification\n")
+    validation, = receipt_verify(candidate, work_dir, write_temp_receipt(work_dir, document), env: env)
+    reasons = validation["reasons"] || []
+    { "lab_result" => { "receipt_stale" => validation["status"] == "stale", "stale_reasons_include_worktree" => reasons.include?("worktree_changed") },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "stale_config"
+    document, = receipt_create(candidate, work_dir, env: env)
+    config = File.read(File.join(work_dir, ".railverdict.yml"))
+    File.write(File.join(work_dir, ".railverdict.yml"), config.sub("mode: no_new_debt", "mode: advisory"))
+    validation, = receipt_verify(candidate, work_dir, write_temp_receipt(work_dir, document), env: env)
+    reasons = validation["reasons"] || []
+    { "lab_result" => { "receipt_stale" => validation["status"] == "stale", "stale_reasons_include_config" => reasons.include?("configuration_changed") },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "stale_baseline"
+    document, = receipt_create(candidate, work_dir, env: env)
+    File.write(File.join(work_dir, ".railverdict-baseline.json"), JSON.generate({ "schema_version" => "1.0", "entries" => [] }))
+    validation, = receipt_verify(candidate, work_dir, write_temp_receipt(work_dir, document), env: env)
+    reasons = validation["reasons"] || []
+    { "lab_result" => { "receipt_stale" => validation["status"] == "stale", "stale_reasons_include_baseline" => reasons.include?("baseline_changed") },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "fail_remains_fail"
+    document, create_exit, = receipt_create(candidate, work_dir, env: env)
+    raise "expected FAIL receipt" unless create_exit == 1 && document.dig("gate_projection", "gate") == "FAIL"
+
+    receipt_path = write_temp_receipt(work_dir, document)
+    validation, verify_exit = receipt_verify(candidate, work_dir, receipt_path, env: env)
+    { "lab_result" => { "receipt_gate" => validation["gate"], "validation_status" => validation["status"], "verify_exit" => verify_exit },
+      "gate" => "FAIL", "completion_status" => "complete", "policy_status" => "fail", "exit_code" => 1 }
+  when "incomplete_cannot_prove"
+    document, create_exit, stderr_text = receipt_create(candidate, work_dir, env: env)
+    gate = document.dig("gate_projection", "gate")
+    raise "expected INCOMPLETE receipt, got exit=#{create_exit} doc=#{JSON.generate(document)[0, 400]} stderr=#{stderr_text[0, 200]}" unless create_exit == 2 && gate == "INCOMPLETE"
+
+    receipt_path = write_temp_receipt(work_dir, document)
+    validation, = receipt_verify(candidate, work_dir, receipt_path, env: env)
+    success_proof = validation["status"] == "fresh" && validation["gate"] == "PASS"
+    { "lab_result" => { "receipt_gate" => validation["gate"], "validation_status" => validation["status"], "success_proof" => success_proof },
+      "gate" => "INCOMPLETE", "completion_status" => "incomplete", "policy_status" => "not_evaluated", "exit_code" => 2 }
+  when "race_during_verification"
+    ready = File.join(work_dir, "tmp", "race.ready")
+    go = File.join(work_dir, "tmp", "race.go")
+    FileUtils.rm_f(ready)
+    FileUtils.rm_f(go)
+
+    ready_path_debug_remove = nil
+    outcome = nil
+    thread = Thread.new do
+      stdout, stderr, status = LabSupport.product_run(candidate, ["receipt", "create", "--format", "json"], cwd: work_dir, extra_env: env)
+      outcome = [LabSupport.json(stdout), status.exitstatus, stderr, stdout]
+    end
+    deadline = Time.now + 30
+    sleep 0.02 until File.exist?(ready) || Time.now > deadline || !thread.alive?
+    unless File.exist?(ready)
+      diag = outcome ? { exit: outcome[1], stderr: outcome[2].to_s[0, 200], stdout: outcome[3].to_s[0, 400] } : nil
+      raise "slow analyzer never became ready (thread_alive=#{thread.alive?} diag=#{diag.inspect})"
+    end unless File.exist?(ready)
+
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# mutated while verification was running\n")
+    File.write(go, "1")
+    thread.join(60)
+    raise "verification thread did not finish" if thread.alive?
+
+    document, exit_code, = outcome
+    code = document.is_a?(Hash) ? document["code"] || document["reasons"].to_s : ""
+    refused = exit_code == 2 && JSON.generate(document).include?("repository_changed_during_verification")
+    { "lab_result" => { "receipt_refused" => refused, "refusal_code_found" => !code.to_s.empty? },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "pr_intelligence_bound"
+    document, create_exit, = receipt_create(candidate, work_dir, extra_args: ["--changed", "--base", "main"], env: env)
+    digest = document.dig("pr_intelligence", "digest")
+    raise "changed-scope receipt creation failed" unless create_exit == 0
+
+    { "lab_result" => { "verification_mode" => document["verification_mode"], "pr_intelligence_digest_present" => !digest.nil? },
+      "gate" => document.dig("gate_projection", "gate"), "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "mcp_single_execution"
+    client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+    begin
+      client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+      tools = client.request("tools/list")
+      names = Array(tools.dig("result", "tools")).map { |tool| tool["name"] }
+      raise "missing agent protocol tools" unless %w[get_verification_receipt get_pr_intelligence].all? { |required| names.include?(required) }
+
+      verify = parse_tool(client, "verify", "changed" => false)
+      embedded = verify["verification_receipt"]
+      receipt = parse_tool(client, "get_verification_receipt", {})
+      pi = parse_tool(client, "get_pr_intelligence", {})
+      verify_calls = client.trace.count { |entry| entry["method"] == "tools/call" && entry.dig("params", "name") == "verify" }
+      derived_calls = client.trace.count { |entry| entry["method"] == "tools/call" && %w[get_verification_receipt get_pr_intelligence].include?(entry.dig("params", "name")) }
+      fresh_ok = receipt["status"] == "fresh" && receipt.dig("receipt", "receipt_id") == embedded&.fetch("receipt_id", nil)
+      { "lab_result" => { "verify_request_count" => verify_calls, "derived_request_count" => derived_calls,
+                          "single_execution" => verify_calls == 1 && derived_calls == 2,
+                          "receipt_after_verify" => receipt["status"],
+                          "pi_after_verify" => pi["status"], "embedded_matches_tool" => fresh_ok },
+        "gate" => verify["gate"], "completion_status" => verify["completion_status"] || "complete", "policy_status" => "pass", "exit_code" => 0,
+        "mcp_trace" => client.trace }
+    ensure
+      client.close
+    end
+  when "mcp_stale_rejected"
+    client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+    begin
+      client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+      client.request("tools/list")
+      parse_tool(client, "verify", "changed" => false)
+      LabSupport.append(work_dir, "app/models/customer.rb", "\n# stale after edit\n")
+      receipt = parse_tool(client, "get_verification_receipt", {})
+      pi = parse_tool(client, "get_pr_intelligence", {})
+      rejected = receipt["status"] == "verification_required" && receipt["code"] == "stale_receipt"
+      { "lab_result" => { "cached_receipt_rejected" => rejected, "pi_status" => pi["status"] },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0,
+        "mcp_trace" => client.trace }
+    ensure
+      client.close
+    end
+  when "repair_new_receipt"
+    client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+    begin
+      client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+      base_sha = LabSupport.git(work_dir, "rev-parse", "main").first.strip
+      raise "cannot resolve main in fixture" unless base_sha.match?(/\A[0-9a-f]{7,64}\z/)
+
+      verify = parse_tool(client, "verify", "changed" => true, "base" => base_sha)
+      list = parse_tool(client, "list_findings")
+      target = Array(list["findings"]).find { |finding| finding["blocking"] == true } ||
+               Array(list["findings"]).find { |finding| finding["state"] == "introduced" }
+      raise "no blocking finding for repair scenario" unless target
+
+      packet = parse_tool(client, "build_repair_packet", "finding_ref" => target["id"])
+      packet_id = packet.dig("packet", "packet_id") || packet["packet_id"]
+      raise "packet_id missing" unless packet_id
+
+      path = File.join(work_dir, target.dig("location", "path").to_s)
+      content = File.read(path)
+      content = content.sub(/\n  def bad_method\b.*?\n  end\n/m, "\n")
+      # also resolve the pre-existing branch debt so the resulting gate can be PASS
+      content = content.sub("    unused_discount_factor = 0.15\n", "")
+      content = content.gsub(/\n{2,}end\n/, "\nend\n") # avoid layout offenses from the removal
+      File.write(path, content)
+      repair = parse_tool(client, "verify_repair", "packet_id" => packet_id, "changed" => true, "base" => base_sha)
+      raise "repair did not fix target: #{repair.inspect[0, 500]}" unless repair["target_status"] == "fixed"
+
+      document, create_exit, = receipt_create(candidate, work_dir, extra_args: ["--changed", "--base", "main", "--packet-id", packet_id], env: env)
+      bound = create_exit.zero? && document.dig("repair", "packet_id") == packet_id &&
+              document.dig("gate_projection", "gate") == "PASS"
+      debug_findings = Array(document.dig("gate_projection", "findings")).map { |f| f["id"] }
+      { "lab_result" => { "target_status" => repair["target_status"], "final_gate" => document.dig("gate_projection", "gate"), "resulting_receipt_bound" => bound, "debug_reason_codes" => document.dig("gate_projection", "decision_reason_codes"), "debug_finding_ids" => debug_findings, "debug_analyzers" => document.dig("gate_projection", "analyzer_evidence") },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0,
+        "mcp_trace" => client.trace }
+    ensure
+      client.close
+    end
+  when "integrity_shortcut"
+    document, = receipt_create(candidate, work_dir, env: env)
+    receipt_path = write_temp_receipt(work_dir, document)
+
+    # Agent attempts the classic shortcut: weaken waivers after a FAIL.
+    finding_probe, probe_exit, = receipt_create(candidate, work_dir, env: env)
+    fingerprint = Array(finding_probe.dig("gate_projection", "findings")).first&.fetch("fingerprint", nil)
+    waiver = { "schema_version" => "1.0", "waivers" => [{
+      "fingerprint" => fingerprint || "sha256:#{"a" * 64}",
+      "reason" => "lab bypass attempt", "owner" => "railverdict-lab",
+      "created_at" => "2026-01-01T00:00:00Z", "expires_at" => "2099-01-01T00:00:00Z"
+    }] }
+    File.write(File.join(work_dir, ".railverdict-waivers.json"), JSON.pretty_generate(waiver))
+
+    validation, = receipt_verify(candidate, work_dir, receipt_path, env: env)
+    reasons = validation["reasons"] || []
+    { "lab_result" => { "shortcut_makes_stale" => validation["status"] == "stale", "stale_reasons_include_waivers" => reasons.include?("waivers_changed") },
+      "gate" => probe_exit == 1 ? "FAIL" : "UNKNOWN", "completion_status" => "complete", "policy_status" => "fail", "exit_code" => 0 }
+  when "two_clones_identity"
+    clone_a = File.join(Dir.tmpdir, "#{File.basename(work_dir)}-alpha")
+    clone_b = File.join(Dir.tmpdir, "beta-with-a-much-longer-different-name-#{Process.pid}")
+    [clone_a, clone_b].each { |dir| FileUtils.rm_rf(dir) }
+    ids = []
+    begin
+      [clone_a, clone_b].each do |dir|
+        FileUtils.mkdir_p(dir)
+        _, stderr, status = LabSupport.run(["git", "clone", "--quiet", "file://#{work_dir}", dir], cwd: work_dir)
+        raise "clone failed: #{stderr}" unless status.success?
+        LabSupport.git(dir, "config", "user.email", "lab@example.invalid")
+        LabSupport.git(dir, "config", "user.name", "RailVerdict Lab")
+        document, create_exit, = receipt_create(candidate, dir, env: candidate.env)
+        raise "receipt create failed in #{dir}" unless create_exit.zero?
+
+        ids << document.fetch("receipt_id")
+      end
+      { "lab_result" => { "receipt_ids_equal" => ids.uniq.length == 1, "identity_sample_prefix" => ids.first.to_s[0, 15] },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+    ensure
+      FileUtils.rm_rf(clone_a)
+      FileUtils.rm_rf(clone_b)
+    end
+  when "stage_only_mutation"
+    document, = receipt_create(candidate, work_dir, env: env)
+    receipt_path = write_temp_receipt(work_dir, document)
+    LabSupport.write_file(work_dir, "brand_new_module.rb", "# staged only\n")
+    LabSupport.git(work_dir, "add", "brand_new_module.rb")
+    validation, = receipt_verify(candidate, work_dir, receipt_path, env: env)
+    reasons = validation["reasons"] || []
+    { "lab_result" => { "receipt_stale" => validation["status"] == "stale", "stale_reasons_include_index" => reasons.include?("index_changed") },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  when "tampering_refused"
+    document, = receipt_create(candidate, work_dir, env: env)
+    tampered = Marshal.load(Marshal.dump(document))
+    tampered["gate_projection"]["gate"] = "FAIL"
+    receipt_path = write_temp_receipt(work_dir, tampered)
+    validation, = receipt_verify(candidate, work_dir, receipt_path, env: env)
+    { "lab_result" => { "tamper_detected" => validation["status"] == "invalid", "validation_status" => validation["status"] },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+  else
+    raise "unknown agent scenario mode #{mode}"
+  end
+end
+
+def write_temp_receipt(_work_dir, document)
+  path = File.join(Dir.tmpdir, "rv-lab-receipt-#{Process.pid}-#{rand(1_000_000)}.json")
+  File.write(path, JSON.generate(document))
+  path
+end
+
 def shallow_fixture(root, work_dir)
   FileUtils.rm_rf(work_dir)
   FileUtils.mkdir_p(File.dirname(work_dir))
@@ -332,6 +586,8 @@ selected.each do |scenario|
                  mcp_security(candidate, ROOT, work_dir)
                when "mcp_freshness"
                  mcp_freshness(candidate, work_dir)
+               when "agent"
+                 agent_receipt(candidate, work_dir, command.fetch("mode"), env)
                when "bootstrap"
                  bootstrap(candidate, work_dir)
                when "package"
