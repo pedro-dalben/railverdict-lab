@@ -95,6 +95,12 @@ module LabSupport
     binary ? File.binwrite(absolute, content) : File.write(absolute, content)
   end
 
+  def append(work_dir, path, content)
+    absolute = File.join(work_dir, path)
+    FileUtils.mkdir_p(File.dirname(absolute))
+    File.open(absolute, "ab") { |file| file.write(content) }
+  end
+
   def apply_operations(work_dir, operations, candidate:, env: {})
     operations.each do |operation|
       operation = { "name" => operation } if operation.is_a?(String)
@@ -198,6 +204,8 @@ module LabSupport
       "printf '%s' '{}'; exit 0"
     when "timeout"
       "sleep 0.25; printf '%s' '{}'; exit 0"
+    when "wait_gate"
+      "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nmkdir -p tmp\nprintf '1' > tmp/race.ready\nuntil [ -f tmp/race.go ]; do sleep 0.02; done\nprintf '%s' '{}'\nexit 0"
     when "signaled"
       "kill -TERM $$"
     when "oversized"

@@ -797,3 +797,212 @@ scenarios:
     skip_if_unsupported: true
     cleanup: "remove_worktree"
     tags: ["pr", "policy", "capability-gated"]
+
+  # ---------------------------------------------------------------
+  # RailVerdict 1.2 — Agent Verification Protocol (RVLAB-AGENT-*)
+  # ---------------------------------------------------------------
+
+  - id: "RVLAB-AGENT-01"
+    title: "Healthy change: verify, receipt, receipt fresh"
+    category: "agent"
+    description: "One canonical verification of a healthy change yields a fresh PASS receipt."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"},
+       {name: "write", path: "spec/models/order_format_spec.rb", content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "healthy" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_created: true, receipt_fresh: true, validation_status: "fresh" }
+    cleanup: "remove_worktree"
+    tags: ["agent", "positive"]
+
+  - id: "RVLAB-AGENT-02"
+    title: "Source edit after verify makes previous receipt STALE"
+    category: "agent"
+    description: "Mutating source after a PASS verification invalidates the earlier receipt."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "stale_source" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_stale: true, stale_reasons_include_worktree: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "stale"]
+
+  - id: "RVLAB-AGENT-03"
+    title: "Configuration change after verify makes receipt STALE"
+    category: "agent"
+    description: "Weakening the configured mode after verification is detected as configuration_changed."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "stale_config" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_stale: true, stale_reasons_include_config: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "stale", "config"]
+
+  - id: "RVLAB-AGENT-04"
+    title: "Baseline change after verify makes receipt STALE"
+    category: "agent"
+    description: "Introducing or editing the baseline invalidates previously issued evidence."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "stale_baseline" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_stale: true, stale_reasons_include_baseline: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "stale", "baseline"]
+
+  - id: "RVLAB-AGENT-05"
+    title: "FAIL receipt remains FAIL"
+    category: "agent"
+    description: "A fresh receipt over a policy failure preserves gate FAIL and exit 1."
+    setup: { strategy: "clone", branch: "lab/03-new-rubocop", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "fail_remains_fail" }
+    expected_gate: "FAIL"
+    expected_completion: "complete"
+    expected_exit: 1
+    expected: { receipt_gate: "FAIL", validation_status: "fresh", verify_exit: 1 }
+    cleanup: "remove_worktree"
+    tags: ["agent", "policy"]
+
+  - id: "RVLAB-AGENT-06"
+    title: "INCOMPLETE receipt cannot become successful proof"
+    category: "agent"
+    description: "Unavailable required analyzer yields INCOMPLETE evidence that never proves success."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations:
+      [{name: "fake_bundle", behavior: "missing"}] }
+    command: { interface: "agent", mode: "incomplete_cannot_prove" }
+    expected_gate: "INCOMPLETE"
+    expected_completion: "incomplete"
+    expected_exit: 2
+    expected: { receipt_gate: "INCOMPLETE", success_proof: false }
+    cleanup: "remove_worktree"
+    tags: ["agent", "refusal"]
+
+  - id: "RVLAB-AGENT-07"
+    title: "Repository changes while verification runs: receipt refused"
+    category: "agent"
+    description: "Deterministic race harness mutates source mid-verification; issuance must fail closed."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations:
+      [{name: "fake_bundle", analyzer: "rubocop", behavior: "wait_gate"}, {name: "mkdir", path: "tmp"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "race_during_verification" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_refused: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "race", "fail-closed"]
+
+  - id: "RVLAB-AGENT-08"
+    title: "PR Intelligence bound to same changed-scope verification"
+    category: "agent"
+    description: "Changed-scope receipts carry a PR Intelligence stable-projection digest."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"},
+       {name: "write", path: "spec/models/order_format_spec.rb", content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "pr_intelligence_bound" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { verification_mode: "changed", pr_intelligence_digest_present: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "pr-intelligence"]
+
+  - id: "RVLAB-AGENT-09"
+    title: "MCP verify then derived tools without duplicate verification"
+    category: "agent"
+    description: "Receipt and PR Intelligence derive from exactly one verify execution."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "mcp_single_execution" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { verify_request_count: 1, single_execution: true, receipt_after_verify: "fresh" }
+    cleanup: "remove_worktree"
+    tags: ["agent", "mcp"]
+
+  - id: "RVLAB-AGENT-10"
+    title: "MCP cached receipt rejected as stale after edit"
+    category: "agent"
+    description: "Editing source after MCP verify forces verification_required instead of stale data."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "mcp_stale_rejected" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { cached_receipt_rejected: true, pi_status: "verification_required" }
+    cleanup: "remove_worktree"
+    tags: ["agent", "mcp", "stale"]
+
+  - id: "RVLAB-AGENT-11"
+    title: "Repair lifecycle ends in a bound PASS receipt"
+    category: "agent"
+    description: "FAIL -> RepairPacket -> external fix -> verify_repair fixed -> resulting receipt bound to packet."
+    setup: { strategy: "clone", branch: "lab/03-new-rubocop", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def bad_method\n    unused_value = 7\n    total_amount\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "repair_new_receipt" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { target_status: "fixed", final_gate: "PASS", resulting_receipt_bound: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "repair"]
+
+  - id: "RVLAB-AGENT-12"
+    title: "Waiver shortcut rejected by integrity boundary"
+    category: "agent"
+    description: "Writing waivers after a FAIL receipt makes it stale with waivers_changed."
+    setup: { strategy: "clone", branch: "lab/03-new-rubocop", operations:
+      [{name: "replace", path: "app/models/order.rb", from: "\nend\n", to: "\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\nend\n"}, {name: "commit"}] }
+    command: { interface: "agent", mode: "integrity_shortcut" }
+    expected_gate: "FAIL"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { shortcut_makes_stale: true, stale_reasons_include_waivers: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "security"]
+
+  - id: "RVLAB-AGENT-13"
+    title: "Two differently named clones produce identical receipt identity"
+    category: "agent"
+    description: "Repository State Identity and receipt_id are independent of checkout paths."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "two_clones_identity" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_ids_equal: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "determinism"]
+
+  - id: "RVLAB-AGENT-14"
+    title: "Staged index-only mutation invalidates receipt"
+    category: "agent"
+    description: "git add without worktree edits still changes identity via the index snapshot."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "stage_only_mutation" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { receipt_stale: true, stale_reasons_include_index: true }
+    cleanup: "remove_worktree"
+    tags: ["agent", "stale", "index"]
+
+  - id: "RVLAB-AGENT-15"
+    title: "Tampered receipt refused by integrity check"
+    category: "agent"
+    description: "Gate flip without recomputing receipt_id is reported invalid, never fresh."
+    setup: { strategy: "clone", branch: "lab/01-clean-change", operations: [] }
+    command: { interface: "agent", mode: "tampering_refused" }
+    expected_gate: "PASS"
+    expected_completion: "complete"
+    expected_exit: 0
+    expected: { tamper_detected: true, validation_status: "invalid" }
+    cleanup: "remove_worktree"
+    tags: ["agent", "security"]
