@@ -13,7 +13,7 @@ The current frozen candidate under certification is `rail_verdict 1.2.0`:
 * **Release Version**: `1.2.0`
 * **Release Tag**: `v1.2.0`
 * **Source Commit**: `d49c204b36fe89a6fcf5f22fd4c42978362b10d2`
-* **Gem Artifact SHA-256**: `564fe3ce8d8030898e1fe015452474ce8e21e0e3d34184fffc0de67dcb281381`
+* **Gem Artifact SHA-256** (published): `d8e848b1e72585b7f583a85d2a67e25b472bd1860549d1d4330c8a33104f82e9` — local build `564fe3ce8d8030898e1fe015452474ce8e21e0e3d34184fffc0de67dcb281381` has byte-identical unpacked contents; outer tar SHA differs only in packaging determinism
 * **Candidate Specification**: [`lab/candidate.yml`](lab/candidate.yml)
 * **Candidate Identity Manifest**: [`artifacts/candidate-identity.json`](artifacts/candidate-identity.json)
 * **Release Certification Report**: [`docs/RAILVERDICT-1.2.0-CERTIFICATION.md`](docs/RAILVERDICT-1.2.0-CERTIFICATION.md)

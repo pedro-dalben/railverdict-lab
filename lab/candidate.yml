@@ -8,8 +8,8 @@ candidate:
   repository: "https://github.com/pedro-dalben/RailVerdict.git"
   source_sha: "d49c204b36fe89a6fcf5f22fd4c42978362b10d2"
   tag: "v1.2.0"
-  gem_sha256: "564fe3ce8d8030898e1fe015452474ce8e21e0e3d34184fffc0de67dcb281381"
-  frozen_at: "2026-08-24T15:00:00-03:00"
+  gem_sha256: "d8e848b1e72585b7f583a85d2a67e25b472bd1860549d1d4330c8a33104f82e9"
+  frozen_at: "2026-08-24T16:28:04Z"
   scenario_catalog_version: "2.0"
 
 environment:

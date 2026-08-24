@@ -29,7 +29,7 @@ The certified gem artifact was frozen and cryptographically verified prior to sc
 | **Release Version** | `1.2.0` |
 | **Git Source Tag** | `v1.2.0` |
 | **Git Source Commit** | `d49c204b36fe89a6fcf5f22fd4c42978362b10d2` |
-| **Gem Artifact SHA-256** | `564fe3ce8d8030898e1fe015452474ce8e21e0e3d34184fffc0de67dcb281381` |
+| **Gem Artifact SHA-256** | `d8e848b1e72585b7f583a85d2a67e25b472bd1860549d1d4330c8a33104f82e9` (local build `564fe3ce...` byte-identical inner payload; outer SHA delta is tar recompression only) |
 | **Candidate Manifest** | [`artifacts/candidate-identity.json`](artifacts/candidate-identity.json) |
 | **Test Environment** | Ruby 3.4.5, Rails 8.1.3.1, Bundler 2.7.1, Linux x86_64 |
 
