@@ -1,117 +1,157 @@
-# RailVerdict Lab — Controlled Real-World Validation Report
+# RailVerdict Lab Validation Report
 
-**Report Generated:** 2026-08-18  
-**Target Application:** `OrderHub` (Ruby on Rails 8.1.3.1 / Ruby 3.4.5)  
-**Execution Environment:** Linux x86_64, local-first black-box gem installation  
+Generated from artifacts/lab-run-summary.json and per-scenario public outputs.
 
----
+## Candidate Identity
 
-## 1. Candidate Under Test
+- Version: railverdict 1.0.1
+- Source SHA: unknown for published gem
+- Gem SHA-256: 5a4a425ede8ea1563cca4e641e874a41b95a6f2e51eb96e759909e4f8979d3a9
+- Verified: true
 
-| Property | Value |
-|---|---|
-| **Gem Package** | `rail_verdict-0.1.0.gem` |
-| **Git Revision** | `54ca7b555045101fed4556d68b1626ccadf34ceb` |
-| **Source Repository** | `git@github.com:pedro-dalben/RailVerdict.git` |
-| **Package Checksum (SHA-256)** | `ce7169c83a5ea4f7025965b0cc97e93744b4ad63de8f90bef977142bd4d6925a` |
-| **Gem Version** | `0.1.0` |
-| **Frozen At** | `2026-08-18T12:46:11-03:00` |
+## Lab Identity
 
----
+- Lab commit: e92156ef80b87ade3011a23a71604f18b8a6952e
+- Ruby: 3.4.10
+- Rails: Rails 8.1.3.1
+- Bundler: Bundler version 2.7.1
+- Scenario catalog: 2.0
 
-## 2. Executive Recommendation: NO-GO (P0 Release Blocker Discovered)
+## Executive Result
 
-> [!CAUTION]
-> **MERGE GATE RECOMMENDATION: NO-GO / BLOCKED FOR PUBLIC RELEASE**
-> 
-> Real-world validation in `RailVerdict Lab` discovered **1 critical P0 False-PASS defect** and **1 high-severity P1 analyzer defect**. 
-> While baseline adoption, anti-cheating security checks, waivers, and the MCP stdio protocol performed exceptionally well, the P0 defect violates the core merge-gate safety promise by reporting `PASS` on broken test assertions.
+TOTAL: 58
+PASS: 48
+FAIL: 5
+BLOCKED: 0
+SKIPPED: 5
 
-### Defect Summary
-1. **P0 / RELEASE BLOCKER (RVLAB-003)**: In RSpec, modifying a test assertion inside an `it "..."` block causes RSpec's native JSON formatter to report the example's header line rather than the assertion line. RailVerdict's `ChangedLineEvaluator` treats the failure as "outside changed lines" and returns **`Gate: PASS` (False PASS)**.
-2. **P1 / HIGH SEVERITY (RVLAB-001)**: The Minitest probe command `bundle exec ruby -I test -r test_helper --version` is intercepted by MRI Ruby, returning Ruby's version `3.4.5`. RailVerdict rejects this as `unsupported (3.4.5 < 5.0)`, preventing any Minitest suite from executing in real Rails apps.
-3. **DOC GAP / EXPECTED (RVLAB-002)**: SimpleCov upstream JSON formatter outputs a hash-based dictionary rather than the `files` array mandated by RailVerdict's `coverage-v1.schema.json`.
+## Category Results
 
----
+- acceptance: 14/14 passed; 0 skipped
+- policy_rejection: 4/4 passed; 0 skipped
+- refusal: 15/17 passed; 1 skipped
+- baseline_waiver: 5/5 passed; 0 skipped
+- git_changed_scope: 1/2 passed; 0 skipped
+- repair_anti_cheating: 2/3 passed; 0 skipped
+- mcp: 3/3 passed; 0 skipped
+- analyzers: 2/2 passed; 0 skipped
+- package: 1/1 passed; 0 skipped
+- determinism: 0/1 passed; 0 skipped
+- multi_fault: 1/1 passed; 0 skipped
+- pr_intelligence: 0/0 passed; 4 skipped
 
-## 3. Validation Matrix & Empirical Results
+## Full Scenario Matrix
 
-| ID | Title | Category | Expected Gate | Actual Gate | Expected Exit | Actual Exit | Oracle Status | Duration |
-|---|---|---|---|---|---|---|---|---|
-| **RVLAB-01** | Clean application change | Core PR | PASS | **PASS** | 0 | **0** | ✅ MATCH | 5.25s |
-| **RVLAB-02** | Existing legacy debt only | Core PR | PASS | **PASS** | 0 | **0** | ✅ MATCH | 5.22s |
-| **RVLAB-03** | New RuboCop regression | Core PR | FAIL | **FAIL** | 1 | **1** | ✅ MATCH | 5.36s |
-| **RVLAB-04** | Real Minitest failure | Core PR | FAIL | **INCOMPLETE** | 1 | **2** | ❌ DEFECT (RVLAB-001) | 4.65s |
-| **RVLAB-05** | Real RSpec failure | Core PR | FAIL | **PASS** | 1 | **0** | ❌ FALSE PASS (RVLAB-003) | 4.30s |
-| **RVLAB-06** | Zero required tests | Core PR | INCOMPLETE | **INCOMPLETE** | 2 | **2** | ✅ MATCH | 4.28s |
-| **RVLAB-07** | Required analyzer unavailable | Core PR | INCOMPLETE | **INCOMPLETE** | 2 | **2** | ✅ MATCH | 3.89s |
-| **RVLAB-08** | Active waiver | Core PR | PASS | **PASS** | 0 | **0** | ✅ MATCH | 9.80s |
-| **RVLAB-09** | Expired waiver | Core PR | FAIL | **FAIL** | 1 | **1** | ✅ MATCH | 9.99s |
-| **RVLAB-10** | Git edge cases (renames, binary) | Core PR | PASS | **PASS** | 0 | **0** | ✅ MATCH | 5.48s |
-| **RVLAB-11** | Changed scope vs historical debt | Core PR | FAIL | **FAIL** | 1 | **1** | ✅ MATCH | 5.30s |
-| **RVLAB-12** | Real changed-line coverage | Core PR | PASS | **PASS** | 0 | **0** | ✅ MATCH | 5.35s |
-| **RVLAB-13** | Invalid Git base | Operational | INCOMPLETE | **INCOMPLETE** | 2 | **2** | ✅ MATCH | 1.31s |
-| **RVLAB-14** | Shallow Git history | Operational | INCOMPLETE | **INCOMPLETE** | 2 | **2** | ✅ MATCH | 1.30s |
-| **RVLAB-15** | Agent cheats: policy weakening | Security | PASS* | **PASS** (advisory) | 0 | **0** | ✅ MATCH | 4.26s |
-| **RVLAB-16** | Agent cheats: waiver addition | Security | FAIL | **FAIL** (regressed) | 1 | **1** | ✅ MATCH | 8.64s |
-| **RVLAB-17** | Agent cheats: baseline mutation | Security | FAIL | **FAIL** (boundary) | 1 | **1** | ✅ MATCH | 8.65s |
-| **RVLAB-18** | MCP complete repair loop | MCP | PASS | **PASS** | 0 | **0** | ✅ MATCH | 8.36s |
+| ID | Title | Expected | Actual | Exit | Result | Runtime |
+|---|---|---|---|---:|---|---:|
+| RVLAB-01 | Clean model behavior with a matching test | PASS/0 | PASS | 0 | PASS | 6.767s |
+| RVLAB-02 | Historical debt remains non-blocking | PASS/0 | PASS | 0 | PASS | 5.047s |
+| RVLAB-03 | New RuboCop offense is rejected | FAIL/1 | FAIL | 1 | PASS | 6.034s |
+| RVLAB-04 | Real Minitest failure | FAIL/1 | FAIL | 1 | PASS | 8.089s |
+| RVLAB-05 | Real RSpec failure | FAIL/1 | FAIL | 1 | PASS | 4.655s |
+| RVLAB-06 | Required test suite with zero tests | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 6.502s |
+| RVLAB-07 | Required analyzer unavailable | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 4.984s |
+| RVLAB-08 | Active waiver is visible and non-blocking | PASS/0 | PASS | 0 | PASS | 12.867s |
+| RVLAB-09 | Expired waiver blocks the change | FAIL/1 | FAIL | 1 | PASS | 11.433s |
+| RVLAB-10 | Git paths, rename, Unicode, TAB, binary, and empty file | PASS/0 | PASS | 0 | PASS | 6.118s |
+| RVLAB-11 | New debt blocks while unrelated debt remains existing | FAIL/1 | FAIL | 1 | PASS | 4.818s |
+| RVLAB-12 | Changed-line coverage evidence | PASS/0 | PASS | 0 | PASS | 5.048s |
+| RVLAB-13 | Invalid Git base refuses success | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.521s |
+| RVLAB-14 | Shallow history without a trustworthy base | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.525s |
+| RVLAB-15 | Repair rejects policy weakening | WARN/1 | WARN | 1 | PASS | 11.857s |
+| RVLAB-16 | Repair rejects waiver injection | FAIL/1 | PASS | 0 | FAIL | 11.092s |
+| RVLAB-17 | Repair rejects baseline mutation | INCOMPLETE/1 | INCOMPLETE | 1 | PASS | 10.774s |
+| RVLAB-18 | Public MCP repair loop succeeds after a real fix | PASS/0 | PASS | 0 | PASS | 10.619s |
+| RVLAB-19 | MCP repository path containment | PASS/0 | PASS | 0 | PASS | 5.503s |
+| RVLAB-20 | No-new-debt baseline bootstrap | PASS/0 | PASS | 0 | PASS | 12.365s |
+| RVLAB-21 | MCP evidence freshness after dirty edits | PASS/0 | PASS | 0 | PASS | 20.471s |
+| RVLAB-ACCEPT-01 | Controller/request behavior with a test | PASS/0 | PASS | 0 | PASS | 5.0s |
+| RVLAB-ACCEPT-02 | Service object change | PASS/0 | PASS | 0 | PASS | 4.947s |
+| RVLAB-ACCEPT-03 | Authorization change with matching test | PASS/0 | PASS | 0 | PASS | 4.953s |
+| RVLAB-ACCEPT-04 | Migration and model adjustment | PASS/0 | PASS | 0 | PASS | 4.958s |
+| RVLAB-ACCEPT-05 | Route and controller change | PASS/0 | PASS | 0 | PASS | 4.911s |
+| RVLAB-ACCEPT-06 | Dependency-neutral refactor | PASS/0 | PASS | 0 | PASS | 4.952s |
+| RVLAB-ACCEPT-07 | Test-only improvement | PASS/0 | PASS | 0 | PASS | 4.991s |
+| RVLAB-ACCEPT-08 | Resolve existing finding | PASS/0 | PASS | 0 | PASS | 4.976s |
+| RVLAB-ACCEPT-09 | Rename/refactor preserving behavior | PASS/0 | PASS | 0 | PASS | 4.965s |
+| RVLAB-ACCEPT-10 | Healthy multi-file Rails change | PASS/0 | PASS | 0 | PASS | 4.968s |
+| RVLAB-ACCEPT-11 | Public SARIF result remains consumable | PASS/0 | PASS | 0 | PASS | 4.969s |
+| RVLAB-REFUSE-01 | Required analyzer executable missing | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.842s |
+| RVLAB-REFUSE-02 | Required analyzer timeout | INCOMPLETE/2 | UNKNOWN | - | SKIPPED | 0.0s |
+| RVLAB-REFUSE-03 | Analyzer unexpected exit | INCOMPLETE/2 | UNKNOWN | 1 | FAIL | 0.835s |
+| RVLAB-REFUSE-04 | Analyzer signaled | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.461s |
+| RVLAB-REFUSE-05 | Malformed analyzer JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.471s |
+| RVLAB-REFUSE-06 | Analyzer output lacks required JSON | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.463s |
+| RVLAB-REFUSE-07 | Required zero-test evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.25s |
+| RVLAB-REFUSE-08 | Invalid base in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.521s |
+| RVLAB-REFUSE-09 | Shallow history in refusal matrix | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 1.515s |
+| RVLAB-REFUSE-10 | Missing required baseline | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.821s |
+| RVLAB-REFUSE-11 | Invalid baseline data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.282s |
+| RVLAB-REFUSE-12 | Invalid waiver data | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.304s |
+| RVLAB-REFUSE-13 | Malformed RailVerdict configuration | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 0.304s |
+| RVLAB-REFUSE-14 | Oversized required evidence | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 2.478s |
+| RVLAB-BASELINE-01 | Public baseline creation lifecycle | PASS/0 | PASS | 0 | PASS | 12.366s |
+| RVLAB-BASELINE-02 | Invalid baseline is fail-closed | INCOMPLETE/2 | INCOMPLETE | 2 | PASS | 5.963s |
+| RVLAB-GIT-01 | Deleted and multi-commit changed scope | PASS/0 | PASS | 0 | FAIL | 5.286s |
+| RVLAB-ANALYZER-01 | All configured analyzers available and clean | PASS/0 | PASS | 0 | PASS | 6.895s |
+| RVLAB-ANALYZER-02 | Bundler-audit public evidence | PASS/0 | PASS | 0 | PASS | 5.703s |
+| RVLAB-PACKAGE-01 | Installed package identity and CLI surface | PASS/0 | PASS | 0 | PASS | 3.259s |
+| RVLAB-DETERMINISM-01 | Repeated public JSON is deterministic | PASS/0 | PASS | 0 | FAIL | 12.048s |
+| RVLAB-MULTI-FAULT-01 | Healthy tests plus a real quality regression | FAIL/1 | FAIL | 1 | PASS | 5.008s |
+| RVLAB-PR-01 | PR Intelligence basic report | PASS/0 | UNKNOWN | - | SKIPPED | 0.0s |
+| RVLAB-PR-02 | PR Intelligence no-baseline quality delta | PASS/0 | UNKNOWN | - | SKIPPED | 0.0s |
+| RVLAB-PR-03 | PR Intelligence preserves incomplete gate | INCOMPLETE/2 | UNKNOWN | - | SKIPPED | 0.0s |
+| RVLAB-PR-04 | PR Intelligence preserves failure gate | FAIL/1 | UNKNOWN | - | SKIPPED | 0.0s |
 
-*Note: In RVLAB-15, verify_repair flags `verification_boundary_changed: true` when configuration is tampered.*
+## Refusal Evidence
 
----
+| Scenario | Expected | Actual | Result |
+|---|---|---|---|
+| RVLAB-06 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-07 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-13 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-14 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-01 | INCOMPLETE/2 | UNKNOWN | FAIL |
+| RVLAB-REFUSE-02 | INCOMPLETE/2 | UNKNOWN | SKIPPED |
+| RVLAB-REFUSE-03 | INCOMPLETE/2 | UNKNOWN | FAIL |
+| RVLAB-REFUSE-04 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-05 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-06 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-07 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-08 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-09 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-10 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-11 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-12 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-13 | INCOMPLETE/2 | INCOMPLETE | PASS |
+| RVLAB-REFUSE-14 | INCOMPLETE/2 | INCOMPLETE | PASS |
 
-## 4. Empirical Performance & Stability
+## False-Pass Analysis
 
-- **Fastest Verification Check (CLI):** 1.21s (Git validation fail-closed checks)
-- **Standard PR Check (5 Analyzers + Rails context):** ~5.3s
-- **Full MCP Loop (Init + Tools + Verify + RepairPacket + VerifyRepair):** 8.34s
-- **Process Isolation:** All child processes executed via argument arrays with explicit PID process-group tracking; 0 orphan processes or zombie subprocesses observed.
-- **Fail-Closed Behavior:** Confirmed in all 4 operational failure scenarios (shallow clone, invalid base revision, zero tests, missing analyzer).
+Expected FAIL/INCOMPLETE observed as PASS: YES.
+- RVLAB-16 — Repair rejects waiver injection
 
----
+## Determinism
 
-## 5. Security & Anti-Cheating Protocol Audit
+Observed result: FAIL.
 
-RailVerdict was subjected to 3 deliberate adversarial agent attack vectors:
-1. **Policy Weakening (RVLAB-15):** Changing `mode: no_new_debt` to `mode: advisory` in `.railverdict.yml`.
-   - *Outcome:* `verify_repair` re-read policy and computed configuration digests, catching boundary changes.
-2. **Waiver Injection (RVLAB-16):** Adding unapproved waivers into `.railverdict-waivers.json` to bypass code repair.
-   - *Outcome:* `verify_repair` rejected waiver-masked fixes and reported `target_status: still_present` / `verification_boundary_changed: true`.
-3. **Baseline Overwrite (RVLAB-17):** Overwriting `.railverdict-baseline.json` via `railverdict baseline create --force` instead of fixing code.
-   - *Outcome:* `verify_repair` detected baseline boundary tampering and preserved failing gate status.
+## Performance
 
----
+Runtime values are measured in this environment only; they are not benchmarks.
 
-## 6. Model Context Protocol (MCP) Audit
+## Product Defects Found
 
-- **Transport:** stdio JSON-RPC 2.0 (`railverdict mcp serve`)
-- **Protocol Version:** `2025-11-25`
-- **Tool Inventory:** 7 declared tools (`verify`, `list_findings`, `get_finding`, `build_repair_packet`, `verify_repair`, `explain`, `investigate`)
-- **Anti-Tampering Invariant:** **0 unauthorized write, exec, or git tools discovered.** The tool surface is strictly read-only and analytical.
-- **RepairPacket Contract:** Generated bounded (8.4 KB), secret-redacted, schema-compliant `repair_packet` v1.
-- **End-to-End Autonomous Repair Loop:**
-  `verify` (FAIL) ➔ `list_findings` (3 found) ➔ `get_finding` ➔ `build_repair_packet` ➔ (External edit applied) ➔ `verify_repair` (fixed: true, gate: PASS).
+- RVLAB-FINDING-001.md
+- RVLAB-FINDING-002.md
+- RVLAB-FINDING-003.md
+- RVLAB-FINDING-004.md
 
----
+## Limitations of This Campaign
 
-## 7. Remote Publication Boundary
+- PR Intelligence scenarios are capability-gated and are skipped when the frozen candidate has no public pr command.
+- RVLAB-REFUSE-02 is capability-gated and is skipped because the frozen candidate declares no per-analyzer timeout capability.
+- External client/player behavior and hosted CI remain outside this local campaign.
 
-In accordance with safety instructions, remote GitHub repository creation was withheld until authorized.
+## Final Verdict
 
-To publish this validated laboratory to GitHub under `pedro-dalben/railverdict-lab`:
-```bash
-# 1. Create remote repository
-gh repo create pedro-dalben/railverdict-lab --public --source=. --description="Real-world validation laboratory for RailVerdict"
-
-# 2. Push main branch
-git push -u origin main
-
-# 3. Push all validation scenario branches
-git push origin --all
-
-# 4. Open validation pull requests for GitHub Actions verification
-for branch in $(git branch --list 'lab/*' | tr -d ' *'); do
-  gh pr create --base main --head "$branch" --title "Validation Scenario: $branch" --body "Automated test scenario for RailVerdict PR gate."
-done
-```
+VALIDATION FAIL

@@ -10,9 +10,6 @@ The synthetic OrderHub Rails application is deliberately realistic. Broken
 fixtures are part of the test: they prove that the candidate rejects bad or
 unverifiable changes instead of manufacturing success.
 
-> This repository contains intentionally broken synthetic branches and PR
-> scenarios. They are validation examples, not product changes to merge.
-
 ## What this repository is
 
 This repository is the validation lab, not the RailVerdict product.

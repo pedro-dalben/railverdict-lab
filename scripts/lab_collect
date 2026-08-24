@@ -1,97 +1,146 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require "json"
-require "yaml"
 require "fileutils"
+require "json"
+require "optparse"
+require "yaml"
 
-repo_root = File.expand_path("..", __dir__)
-manifest_path = File.join(repo_root, "lab/scenarios.yml")
-candidate_path = File.join(repo_root, "lab/candidate.yml")
-manifest = YAML.safe_load(File.read(manifest_path)) rescue { "scenarios" => [] }
-candidate = YAML.safe_load(File.read(candidate_path)) rescue {}
+root = File.expand_path("..", __dir__)
+report_path = File.join(root, "docs", "VALIDATION_REPORT.md")
+OptionParser.new { |opts| opts.on("--report PATH") { |value| report_path = File.expand_path(value) } }.parse!
 
-scenarios = manifest.fetch("scenarios", [])
-summary_entries = []
+manifest = YAML.safe_load(File.read(File.join(root, "lab", "scenarios.yml")), aliases: true)
+identity_path = File.join(root, "artifacts", "candidate-identity.json")
+candidate = if File.file?(identity_path)
+              JSON.parse(File.read(identity_path))
+            else
+              YAML.safe_load(File.read(File.join(root, "lab", "candidate.yml")), aliases: true)
+            end
+run_path = File.join(root, "artifacts", "lab-run-summary.json")
+run_summary = File.file?(run_path) ? JSON.parse(File.read(run_path)) : { "results" => [] }
+run_results = run_summary.fetch("results", []).to_h { |result| [result["id"], result] }
+selected_scenarios = if run_results.empty?
+                       manifest.fetch("scenarios")
+                     else
+                       manifest.fetch("scenarios").select { |scenario| run_results.key?(scenario.fetch("id")) }
+                     end
 
-false_pass_count = 0
-false_fail_count = 0
-unexpected_incomplete_count = 0
-expected_incomplete_matched = 0
-durations = []
-
-scenarios.each do |scenario|
-  id = scenario["id"]
-  title = scenario["title"]
-  category = scenario["category"]
-  expected = scenario["expected"] || {}
-
-  obs_path = File.join(repo_root, "artifacts", id, "lab-observation.json")
-  res_path = File.join(repo_root, "artifacts", id, "railverdict-result.json")
-
-  obs = File.file?(obs_path) ? (JSON.parse(File.read(obs_path)) rescue {}) : {}
-  res = File.file?(res_path) ? (JSON.parse(File.read(res_path)) rescue {}) : {}
-
-  actual_gate = obs.dig("actual", "gate") || res.dig("gate") || "UNKNOWN"
-  actual_completion = obs.dig("actual", "completion_status") || res.dig("completion_status") || "UNKNOWN"
-  actual_exit = obs.dig("actual", "exit_code")
-  oracle_pass = obs["all_matched"] == true
-
-  expected_gate = expected["gate"] || "N/A"
-  expected_exit = expected["exit_code"] || "N/A"
-
-  # Detect false PASS
-  if (expected_gate == "FAIL" || expected_gate == "INCOMPLETE") && actual_gate == "PASS"
-    false_pass_count += 1
-  end
-
-  # Detect false FAIL
-  if expected_gate == "PASS" && actual_gate == "FAIL"
-    false_fail_count += 1
-  end
-
-  # Detect unexpected INCOMPLETE
-  if expected_gate != "INCOMPLETE" && actual_gate == "INCOMPLETE"
-    unexpected_incomplete_count += 1
-  elsif expected_gate == "INCOMPLETE" && actual_gate == "INCOMPLETE"
-    expected_incomplete_matched += 1
-  end
-
-  duration = res.dig("duration_seconds") || 0.0
-
-  summary_entries << {
-    id: id,
-    title: title,
-    category: category,
-    expected_gate: expected_gate,
-    actual_gate: actual_gate,
-    expected_exit: expected_exit,
-    actual_exit: actual_exit,
-    oracle_pass: oracle_pass,
-    duration: duration
+rows = selected_scenarios.map do |scenario|
+  id = scenario.fetch("id")
+  artifact = File.join(root, "artifacts", id)
+  observation_path = File.join(artifact, "lab-observation.json")
+  observed_path = File.join(artifact, "observed.json")
+  observation = File.file?(observation_path) ? JSON.parse(File.read(observation_path)) : {}
+  observed = File.file?(observed_path) ? JSON.parse(File.read(observed_path)) : {}
+  runner = run_results[id] || {}
+  status = runner["status"] || (observation["all_matched"] == true ? "PASS" : "BLOCKED")
+  status = "SKIPPED" if observed["status"] == "SKIPPED"
+  {
+    "id" => id, "title" => scenario["title"], "category" => scenario["category"],
+    "expected_gate" => scenario["expected_gate"], "actual_gate" => observation.dig("actual", "gate") || "UNKNOWN",
+    "expected_exit" => scenario["expected_exit"], "actual_exit" => observation.dig("actual", "exit_code"),
+    "status" => status, "duration" => runner["duration_seconds"] || observation["duration_seconds"] || 0.0,
+    "error" => runner["error"]
   }
 end
 
-# MCP summary
-mcp_file = File.join(repo_root, "artifacts/mcp/mcp-loop-result.json")
-mcp_result = File.file?(mcp_file) ? (JSON.parse(File.read(mcp_file)) rescue {}) : {}
+counts = rows.group_by { |row| row["status"] }.transform_values(&:length)
+false_passes = rows.select { |row| %w[FAIL INCOMPLETE].include?(row["expected_gate"]) && row["actual_gate"] == "PASS" }
+false_fails = rows.select { |row| row["expected_gate"] == "PASS" && row["actual_gate"] == "FAIL" }
+categories = rows.group_by { |row| row["category"] }.transform_values do |items|
+  { "passed" => items.count { |item| item["status"] == "PASS" }, "total" => items.count { |item| item["status"] != "SKIPPED" }, "skipped" => items.count { |item| item["status"] == "SKIPPED" } }
+end
+verdict = if false_passes.any?
+            "VALIDATION FAIL"
+          elsif counts["BLOCKED"].to_i.positive? || counts["FAIL"].to_i.positive?
+            "VALIDATION PASS WITH FINDINGS"
+          else
+            "VALIDATION PASS"
+          end
 
-summary = {
-  candidate: candidate,
-  metrics: {
-    scenario_total: scenarios.length,
-    scenario_matched: summary_entries.count { |e| e[:oracle_pass] },
-    scenario_match_percentage: (summary_entries.count { |e| e[:oracle_pass] }.to_f / [scenarios.length, 1].max * 100).round(1),
-    false_pass_count: false_pass_count,
-    false_fail_count: false_fail_count,
-    unexpected_incomplete_count: unexpected_incomplete_count,
-    expected_incomplete_matched: expected_incomplete_matched,
-    mcp_loop_success: mcp_result["mcp_success"] == true,
-    mcp_tools_count: mcp_result["tools_count"] || 0
-  },
-  scenarios: summary_entries
-}
+summary = { "candidate" => candidate, "counts" => counts, "false_passes" => false_passes, "false_fails" => false_fails, "categories" => categories, "scenarios" => rows, "final_verdict" => verdict }
+File.write(File.join(root, "artifacts", "validation-summary.json"), JSON.pretty_generate(summary))
 
-File.write(File.join(repo_root, "artifacts/validation-summary.json"), JSON.pretty_generate(summary))
-puts "Saved validation summary to artifacts/validation-summary.json"
-puts "Metrics: #{summary[:metrics][:scenario_matched]}/#{summary[:metrics][:scenario_total]} matched. False PASS: #{false_pass_count}"
+lines = []
+lines << "# RailVerdict Lab Validation Report"
+lines << ""
+lines << "Generated from artifacts/lab-run-summary.json and per-scenario public outputs."
+lines << ""
+lines << "## Candidate Identity"
+lines << ""
+lines << "- Version: #{candidate["railverdict_version"] || candidate.dig("candidate", "gem_version")}"
+lines << "- Source SHA: #{candidate.dig("candidate", "source_sha") || "unknown for published gem"}"
+lines << "- Gem SHA-256: #{candidate["artifact_sha256"] || candidate.dig("candidate", "gem_sha256")}"
+lines << "- Verified: #{candidate["verified"]}"
+lines << ""
+lines << "## Lab Identity"
+lines << ""
+lines << "- Lab commit: #{candidate["lab_commit"] || "not captured"}"
+lines << "- Ruby: #{candidate["ruby_version"]}"
+lines << "- Rails: #{candidate["rails_version"]}"
+lines << "- Bundler: #{candidate["bundler_version"]}"
+lines << "- Scenario catalog: #{candidate["scenario_catalog_version"] || manifest["catalog_version"]}"
+lines << ""
+lines << "## Executive Result"
+lines << ""
+lines << "TOTAL: #{rows.length}"
+lines << "PASS: #{counts["PASS"].to_i}"
+lines << "FAIL: #{counts["FAIL"].to_i}"
+lines << "BLOCKED: #{counts["BLOCKED"].to_i}"
+lines << "SKIPPED: #{counts["SKIPPED"].to_i}"
+lines << ""
+lines << "## Category Results"
+lines << ""
+categories.each { |category, result| lines << "- #{category}: #{result["passed"]}/#{result["total"]} passed; #{result["skipped"]} skipped" }
+lines << ""
+lines << "## Full Scenario Matrix"
+lines << ""
+lines << "| ID | Title | Expected | Actual | Exit | Result | Runtime |"
+lines << "|---|---|---|---|---:|---|---:|"
+rows.each { |row| lines << "| #{row["id"]} | #{row["title"]} | #{row["expected_gate"]}/#{row["expected_exit"]} | #{row["actual_gate"]} | #{row["actual_exit"] || "-"} | #{row["status"]} | #{row["duration"]}s |" }
+lines << ""
+lines << "## Refusal Evidence"
+lines << ""
+lines << "| Scenario | Expected | Actual | Result |"
+lines << "|---|---|---|---|"
+rows.select { |row| row["category"] == "refusal" }.each { |row| lines << "| #{row["id"]} | #{row["expected_gate"]}/#{row["expected_exit"]} | #{row["actual_gate"]} | #{row["status"]} |" }
+lines << ""
+lines << "## False-Pass Analysis"
+lines << ""
+lines << "Expected FAIL/INCOMPLETE observed as PASS: #{false_passes.any? ? "YES" : "NO"}."
+false_passes.each { |row| lines << "- #{row["id"]} — #{row["title"]}" }
+lines << ""
+lines << "## Determinism"
+lines << ""
+determinism = rows.find { |row| row["id"] == "RVLAB-DETERMINISM-01" }
+lines << "Observed result: #{determinism ? determinism["status"] : "NOT RUN"}."
+lines << ""
+lines << "## Performance"
+lines << ""
+lines << "Runtime values are measured in this environment only; they are not benchmarks."
+lines << ""
+lines << "## Product Defects Found"
+lines << ""
+finding_files = Dir[File.join(root, "docs", "findings", "RVLAB-FINDING-*.md")].sort
+if finding_files.empty?
+  lines << "No structured defect documents were present at report generation time."
+else
+  finding_files.each { |path| lines << "- #{File.basename(path)}" }
+end
+lines << ""
+lines << "## Limitations of This Campaign"
+lines << ""
+lines << "- PR Intelligence scenarios are capability-gated and are skipped when the frozen candidate has no public pr command."
+lines << "- RVLAB-REFUSE-02 is capability-gated and is skipped because the frozen candidate declares no per-analyzer timeout capability."
+lines << "- External client/player behavior and hosted CI remain outside this local campaign."
+lines << ""
+lines << "## Final Verdict"
+lines << ""
+lines << verdict
+lines << ""
+
+FileUtils.mkdir_p(File.dirname(report_path))
+File.write(report_path, lines.join("\n"))
+puts "Generated #{report_path}"
+puts JSON.pretty_generate(counts)
