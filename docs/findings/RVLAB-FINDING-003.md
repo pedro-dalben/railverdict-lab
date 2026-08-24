@@ -2,7 +2,7 @@
 
 ## Status
 
-OPEN
+RESOLVED in RailVerdict 1.2.0 (Discovered in 1.0.1; Verified Fixed in 1.2.0)
 
 ## Severity
 

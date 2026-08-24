@@ -49,9 +49,9 @@ def evaluate(scenario, actual, exit_code)
   expected = expected_for(scenario)
   product = actual["product_result"].is_a?(Hash) ? actual["product_result"] : actual
   effective_exit = actual.key?("exit_code") ? actual["exit_code"] : exit_code
-  actual_gate = product["gate"] || actual["gate"] || "UNKNOWN"
-  actual_completion = product["completion_status"] || actual["completion_status"] || "UNKNOWN"
-  actual_policy = product["policy_status"] || actual["policy_status"] || "UNKNOWN"
+  actual_gate = product["gate"] || product.dig("gate_result", "gate") || actual["gate"] || "UNKNOWN"
+  actual_completion = product["completion_status"] || product.dig("gate_result", "completion_status") || actual["completion_status"] || "UNKNOWN"
+  actual_policy = product["policy_status"] || product.dig("gate_result", "policy_status") || actual["policy_status"] || "UNKNOWN"
   checks = []
 
   { "gate" => actual_gate, "completion_status" => actual_completion, "policy_status" => actual_policy, "exit_code" => effective_exit }.each do |key, value|
@@ -59,8 +59,8 @@ def evaluate(scenario, actual, exit_code)
     checks << { "name" => key, "expected" => expected[key], "actual" => value, "matched" => expected[key] == value }
   end
 
-  counts = lookup(product, ["comparison", "counts"]) || {}
-  findings = Array(product["findings"])
+  counts = lookup(product, ["comparison", "counts"]) || lookup(product, ["gate_result", "comparison", "counts"]) || {}
+  findings = Array(product["findings"] || product.dig("gate_result", "findings"))
   counts = {
     "introduced" => counts["introduced"] || findings.count { |item| item["state"] == "introduced" },
     "existing" => counts["existing"] || findings.count { |item| item["state"] == "existing" },

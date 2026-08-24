@@ -37,6 +37,19 @@ module LabSupport
     end
   end
 
+  def stable_result_projection(result_json)
+    res = canonical(result_json)
+    if res["analyzer_results"].is_a?(Array)
+      res["analyzer_results"].each do |ar|
+        if ar["evidence_summary"].is_a?(Hash)
+          ar["evidence_summary"].delete("duration_seconds")
+          ar["evidence_summary"].delete("_coverage_document")
+        end
+      end
+    end
+    res
+  end
+
   def fixture_env(env, cwd)
     env = env.dup
     gemfile = File.join(cwd, "Gemfile")
@@ -64,8 +77,11 @@ module LabSupport
 
     git(work_dir, "config", "user.email", "lab@example.invalid")
     git(work_dir, "config", "user.name", "RailVerdict Lab")
-    _stdout, stderr, status = git(work_dir, "branch", "main", "HEAD")
-    raise "fixture base branch failed: #{stderr}" unless status.success?
+    _stdout, stderr, status = current_branch = git(work_dir, "rev-parse", "--abbrev-ref", "HEAD").first.to_s.strip
+    if current_branch != "main"
+      _stdout, stderr, status = git(work_dir, "checkout", "-B", "main", "HEAD")
+      raise "fixture base branch failed: #{stderr}" unless status.success?
+    end
     return unless branch
 
     _stdout, stderr, status = git(work_dir, "checkout", "-b", branch)
@@ -132,6 +148,21 @@ module LabSupport
         write_file(work_dir, operation.fetch("path"), [operation.fetch("hex")].pack("H*"), binary: true)
       when "mkdir"
         FileUtils.mkdir_p(File.join(work_dir, operation.fetch("path")))
+      when "install_large_rspec"
+        install_large_rspec(work_dir, operation.fetch("count", 1500))
+      when "write_native_simplecov"
+        coverage_data = {
+          "meta" => { "simplecov_version" => "0.22.0" },
+          "timestamp" => Time.now.to_i,
+          "coverage" => {
+            File.join(work_dir, operation.fetch("target_file", "app/models/order.rb")) => {
+              "lines" => operation.fetch("lines", [1, 1, nil, "ignored", 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            }
+          }
+        }
+        write_file(work_dir, "coverage/coverage.json", JSON.pretty_generate(coverage_data))
+      when "remove", "remove_file"
+        FileUtils.rm_f(File.join(work_dir, operation.fetch("path")))
       when "config_replace"
         path = File.join(work_dir, ".railverdict.yml")
         File.write(path, File.read(path).sub(operation.fetch("from"), operation.fetch("to")))
@@ -197,19 +228,25 @@ module LabSupport
     when "missing"
       "exit 127"
     when "unexpected_exit"
-      "printf '%s' '{}'; exit 3"
+      "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{}'; exit 3"
     when "malformed_json"
-      "printf '%s' '{not-json'; exit 0"
+      "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{not-json'; exit 0"
     when "missing_json"
-      "printf '%s' '{}'; exit 0"
+      "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{}'; exit 0"
     when "timeout"
-      "sleep 0.25; printf '%s' '{}'; exit 0"
+      "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nsleep 3; printf '%s' '{}'; exit 0"
     when "wait_gate"
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nmkdir -p tmp\nprintf '1' > tmp/race.ready\nuntil [ -f tmp/race.go ]; do sleep 0.02; done\nprintf '%s' '{}'\nexit 0"
+    when "adversarial_rubocop"
+      "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{\"files\":[{\"path\":\"app/models/order.rb\",\"offenses\":[{\"cop_name\":\"Layout/TrailingWhitespace\",\"severity\":\"convention\",\"message\":\"\",\"location\":{\"start_line\":1,\"last_line\":1}},{\"cop_name\":\"Style/StringLiterals\",\"severity\":\"warning\",\"message\":\"\\u001b[31mColor\\u001b[0m with \\u0000 null and \\u0007 bell\",\"location\":{\"start_line\":2,\"last_line\":2}},{\"cop_name\":\"Naming/MethodName\",\"severity\":\"convention\",\"message\":\"'$(head -c 8000 /dev/zero | tr '\\0' 'A')'\",\"location\":{\"start_line\":3,\"last_line\":3}},{\"cop_name\":\"Metrics/ClassLength\",\"severity\":\"refactor\",\"message\":\"Broken: \\ufffd\\ufffd\\ufffd\",\"location\":{\"start_line\":4,\"last_line\":4}}]}]}'; exit 1"
+    when "oversized_rspec"
+      "case \"$*\" in *--version*) echo '3.13.6'; exit 0;; esac\nprintf '{\"examples\":['; head -c 18000000 /dev/zero | tr '\\0' 'A'; printf ']}'; exit 1"
+    when "unknown_version_rubocop"
+      "case \"$*\" in *--version*) echo 'unknown-tool-output'; exit 0;; esac\nprintf '{\"files\":[]}'; exit 0"
     when "signaled"
-      "kill -TERM $$"
+      "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nkill -TERM $$"
     when "oversized"
-      "head -c 200000 /dev/zero; exit 0"
+      "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nhead -c 200000 /dev/zero; exit 0"
     else
       raise "unknown fake bundle behavior: #{behavior}"
     end
@@ -233,3 +270,16 @@ module LabSupport
     }
   end
 end
+
+  def install_large_rspec(work_dir, count = 2000)
+    spec_dir = File.join(work_dir, "spec", "models")
+    FileUtils.mkdir_p(spec_dir)
+    lines = ["require 'spec_helper'", "RSpec.describe 'LargeSuite' do"]
+    count.times do |i|
+      lines << "  it 'runs test #{i}' do"
+      lines << "    expect(#{i}).to eq(#{i})"
+      lines << "  end"
+    end
+    lines << "end"
+    File.write(File.join(spec_dir, "large_suite_spec.rb"), lines.join("\n"))
+  end

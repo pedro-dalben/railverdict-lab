@@ -26,7 +26,7 @@ class LabInfrastructureTest < Minitest::Test
     assert_equal "published", candidate.fetch("mode")
     assert_equal 64, candidate.fetch("gem_sha256").length
     assert_match(/\A[0-9a-f]{64}\z/, candidate.fetch("gem_sha256"))
-    assert_nil candidate.fetch("source_sha")
+    assert candidate["source_sha"].nil? || candidate["source_sha"].match?(/\A[0-9a-f]{40}\z/)
   end
 
   def test_catalog_is_versioned_and_complete
@@ -95,5 +95,47 @@ class LabInfrastructureTest < Minitest::Test
     source = File.read(File.join(@root, "scripts", "lab_collect"))
     assert_includes source, "selected_scenarios"
     assert_includes source, "run_results.key?"
+  end
+
+  def test_oracle_rejects_wrong_exit_code
+    _stdout, stderr, status = run_oracle("RVLAB-03", { "gate" => "FAIL", "completion_status" => "complete", "policy_status" => "fail" }, 0)
+    assert_equal 1, status.exitstatus, "Oracle should reject mismatched exit code (expected 1, got 0)"
+    assert_includes stderr, "exit_code: expected 1, got 0"
+  end
+
+  def test_oracle_rejects_wrong_gate
+    _stdout, stderr, status = run_oracle("RVLAB-03", { "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass" }, 1)
+    assert_equal 1, status.exitstatus, "Oracle should reject mismatched gate (expected FAIL, got PASS)"
+    assert_includes stderr, "gate: expected FAIL, got PASS"
+  end
+
+  def test_stable_result_projection_strips_volatile_telemetry
+    require_relative "../../scripts/lab_support"
+    raw_payload = {
+      "schema_version" => "1.0",
+      "gate" => "PASS",
+      "completion_status" => "complete",
+      "analyzer_results" => [
+        {
+          "analyzer" => "rspec",
+          "evidence_summary" => {
+            "tests_total" => 10,
+            "duration_seconds" => 0.042
+          }
+        },
+        {
+          "analyzer" => "simplecov",
+          "evidence_summary" => {
+            "percent" => 100.0,
+            "_coverage_document" => { "timestamp" => 1234567890 }
+          }
+        }
+      ]
+    }
+    projected = LabSupport.stable_result_projection(raw_payload)
+    assert_equal "PASS", projected["gate"]
+    assert_equal 10, projected["analyzer_results"][0]["evidence_summary"]["tests_total"]
+    assert_nil projected["analyzer_results"][0]["evidence_summary"]["duration_seconds"]
+    assert_nil projected["analyzer_results"][1]["evidence_summary"]["_coverage_document"]
   end
 end

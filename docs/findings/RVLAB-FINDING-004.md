@@ -2,7 +2,7 @@
 
 ## Status
 
-OPEN
+RESOLVED in RailVerdict 1.2.0 (Separation of Stable Verification Projection from Volatile Telemetry)
 
 ## Severity
 

@@ -1,199 +1,109 @@
-# RailVerdict Lab 2.0
+# RailVerdict Lab 2.0 — Release Certification & Validation Harness
 
-RailVerdict Lab is a permanent external black-box validation harness for the
-published `rail_verdict` gem. It exercises the public package, CLI, JSON,
-SARIF, MCP stdio, Git, analyzer, baseline, waiver, repair, and PR-facing
-contracts without loading RailVerdict implementation classes or changing
-RailVerdict source code.
+RailVerdict Lab is the authoritative, external, black-box validation and certification harness for the published `rail_verdict` gem. It rigorously exercises the public package, CLI, JSON, SARIF, stdio MCP, Git, analyzer, baseline, waiver, repair anti-cheating, verification receipts, and PR Intelligence contracts without loading RailVerdict internal classes or modifying RailVerdict source code.
 
-The synthetic OrderHub Rails application is deliberately realistic. Broken
-fixtures are part of the test: they prove that the candidate rejects bad or
-unverifiable changes instead of manufacturing success.
+The synthetic OrderHub Rails application is deliberately realistic. Broken fixtures and adversarial simulations are core components of the suite: they prove that the candidate rejects bad, invalid, or unverifiable changes instead of manufacturing success.
 
-## What this repository is
+---
 
-This repository is the validation lab, not the RailVerdict product.
+## 1. Candidate Under Test
 
-The lab installs a frozen candidate from [`lab/candidate.yml`](lab/candidate.yml),
-creates disposable Git/Rails fixtures, invokes only public processes, captures
-their output, and evaluates it with an independent oracle.
+The current frozen candidate under certification is `rail_verdict 1.2.0`:
 
-The current candidate is `rail_verdict` 1.0.1 with SHA-256:
+* **Release Version**: `1.2.0`
+* **Release Tag**: `v1.2.0`
+* **Source Commit**: `d49c204b36fe89a6fcf5f22fd4c42978362b10d2`
+* **Gem Artifact SHA-256**: `564fe3ce8d8030898e1fe015452474ce8e21e0e3d34184fffc0de67dcb281381`
+* **Candidate Specification**: [`lab/candidate.yml`](lab/candidate.yml)
+* **Candidate Identity Manifest**: [`artifacts/candidate-identity.json`](artifacts/candidate-identity.json)
+* **Release Certification Report**: [`docs/RAILVERDICT-1.2.0-CERTIFICATION.md`](docs/RAILVERDICT-1.2.0-CERTIFICATION.md)
 
-```text
-5a4a425ede8ea1563cca4e641e874a41b95a6f2e51eb96e759909e4f8979d3a9
-```
+---
 
-## How to read a result
+## 2. Reading Validation Results
 
-There are two results to distinguish:
+There are two distinct results in every scenario:
 
 ```text
-RailVerdict result: INCOMPLETE / exit 2
-Lab result:        PASS
+RailVerdict Product Result: INCOMPLETE / exit 2
+Lab Oracle Result:          PASS
 ```
 
-The Lab result is about contract matching. An expected RailVerdict `FAIL` or
-`INCOMPLETE` is a Lab `PASS` when the public semantic result, evidence, and
-process exit code match the catalog.
+* **Product Result**: What `railverdict` returned (gate, completion status, exit code, structured JSON).
+* **Lab Oracle Result**: Whether `railverdict`'s behavior matched the strict public contract for that scenario. An expected `FAIL` or `INCOMPLETE` is a Lab `PASS` when the empirical output and exit code exactly match contract expectations.
 
-| Lab status | Meaning |
+| Lab Status | Meaning |
 |---|---|
 | `PASS` | The candidate matched the scenario's public contract. |
-| `FAIL` | The candidate produced an unexpected public result; inspect `docs/findings/`. |
-| `BLOCKED` | The harness could not execute or inspect the scenario; this is infrastructure evidence, not a product verdict. |
-| `SKIPPED` | The candidate did not publicly declare the capability required by the scenario. |
+| `FAIL` | The candidate violated public contract; documented in `docs/findings/`. |
+| `BLOCKED` | Infrastructure execution failure; prevents false certification. |
+| `SKIPPED` | Candidate does not declare the capability required by the scenario. |
 
-The runner intentionally preserves `FAIL` and `BLOCKED` as non-zero process
-statuses. It never turns a product defect into a green check.
+---
 
-## Run locally
-
-Install the lab dependencies and run one scenario, a category, or the full
-campaign:
+## 3. Running the Lab Locally
 
 ```bash
+# Install lab dependencies
 bundle install
 
-# One public scenario
+# Run Lab infrastructure self-tests (negative tests, schema validation, oracle checks)
+bundle exec rake test
+
+# Run a single public scenario
 scripts/lab_run --scenario RVLAB-01
 
-# One validation area
+# Run a validation category
+scripts/lab_run --category acceptance
 scripts/lab_run --category refusal
-scripts/lab_run --category mcp
 scripts/lab_run --category pr_intelligence
+scripts/lab_run --category agent
+scripts/lab_run --category simplecov
 
-# Complete campaign and report
-scripts/lab_run --all
+# Run full release certification campaign (81 scenarios)
+scripts/lab_run --all --artifact artifacts/rail_verdict-1.2.0.gem
+
+# Generate empirical summary report
 scripts/lab_collect
 ```
 
-By default, `scripts/lab_run` downloads/installs the exact published gem from
-`lab/candidate.yml`, verifies its SHA-256, and records the candidate identity.
+---
 
-For local development only:
+## 4. Scenario Catalog & Categories (81 Scenarios)
 
-```bash
-scripts/lab_run --scenario RVLAB-01 --use-installed
-scripts/lab_run --scenario RVLAB-01 --artifact /path/to/rail_verdict.gem
-```
+The scenario catalog is defined in [`lab/scenarios.yml`](lab/scenarios.yml) across 14 categories:
 
-`--use-installed` is explicitly marked as unverified package identity in the
-artifacts. It must not replace the published-package campaign in a release or
-PR report.
+| Category | Count | Scope & Focus |
+|---|---|---|
+| `acceptance` | 11 | Healthy Rails models, controllers, jobs, migrations, routes, refactors, SARIF output, explain, investigate. |
+| `policy_rejection` | 3 | Real RuboCop lint violations, RSpec test failures, BundlerAudit security CVEs under `no_new_debt`. |
+| `refusal` | 14 | Operational refusal (missing Gemfile, bad YAML, missing baseline, timeout, process crash, signaled, malformed). |
+| `baseline_waiver` | 2 | Incremental baseline absorption and active/expired waiver lifecycle. |
+| `git_changed_scope` | 1 | Preserving multi-commit tracked deletions in changed scope. |
+| `analyzers` | 7 | Real analyzers, bundler-audit, large RSpec suite (>2MB), 16MB stream bounds truncation, message safety, unknown tool version. |
+| `simplecov` | 3 | Native SimpleCov JSON normalization, changed-line coverage calculation, invalid coverage fail-closed. |
+| `repair_anti_cheating` | 7 | MCP repair packets, source repair, policy weakening, waiver injection, baseline mutation. |
+| `mcp` | 4 | MCP 2025-11-25 tool discovery, single-verify cache reuse, stale cache refusal, security isolation. |
+| `agent` | 15 | Verification Receipts v1, Repository State Identity v1, freshness transitions, tamper refusal, untracked file isolation. |
+| `pr_intelligence` | 4 | PR Intelligence v1 documents, signals extraction, quality delta derivation, gate alignment. |
+| `determinism` | 2 | 2-run and 20-run stable verification projection invariance. |
+| `package` | 1 | Isolated gem installation and CWD independence. |
+| `multi_fault` | 1 | Concurrent compound analyzer failure + policy failure. |
 
-## PR validation
+---
 
-The GitHub Actions workflow runs one disposable job per category on every pull
-request to `main`:
+## 5. Documentation & Implementation Guides
 
-| Category | What it covers |
-|---|---|
-| `acceptance` | Healthy model, request, service, authorization, migration, route, refactor, test-only, and multi-file changes. |
-| `policy_rejection` | Real RuboCop, RSpec, Minitest, changed-scope, and multi-fault failures. |
-| `refusal` | Missing/failing/signaled/malformed analyzers, zero tests, invalid Git/base/baseline/waiver/config, and bounded evidence. |
-| `baseline_waiver` | Baseline creation, existing debt, active/expired waivers, and invalid baseline data. |
-| `git_changed_scope` | Adds, deletes, renames, Unicode/TAB/space paths, binary/empty files, and multi-commit scope. |
-| `analyzers` | Real configured analyzers and public `bundler-audit` evidence. |
-| `repair_anti_cheating` | MCP repair packets, source repair, policy weakening, waiver injection, and baseline mutation. |
-| `mcp` | Public MCP tools, containment, argument bounds, explain/investigate previews, and evidence freshness. |
-| `package` | Isolated published gem installation and CLI surface. |
-| `determinism` | Repeated canonical public JSON. |
-| `multi_fault` | A realistic change with healthy tests and a real quality regression. |
-| `pr_intelligence` | Public PR reports only when the candidate exposes a public `pr` command. |
-
-### PR Intelligence is capability-gated
-
-`RVLAB-PR-01` through `RVLAB-PR-04` validate the candidate's public PR
-projection when available. The lab checks the frozen capability declaration and
-the public CLI help before running them.
-
-The current 1.0.1 candidate declares:
-
-```yaml
-pr_intelligence: false
-```
-
-Therefore those four scenarios are `SKIPPED`. The Lab does not invent PR
-Intelligence through MCP or private Ruby APIs. A future candidate exposing a
-public `pr` command will automatically exercise the scenarios.
-
-### Why a Lab PR can be red
-
-The Lab is an external validator, so a red category means the published
-candidate violated a contract. That is useful evidence, not necessarily a
-failure of the harness.
-
-For example, the Lab expects an unavailable required analyzer to return
-`INCOMPLETE` with exit code `2`. If the candidate crashes with exit code `1`,
-the refusal job is correctly red and a finding is recorded.
-
-The final PR #13 campaign demonstrates this distinction:
-
-| Result | Count |
-|---|---:|
-| Scenarios | 58 |
-| Contract matches | 48 |
-| Product mismatches | 5 |
-| Capability skips | 5 |
-| Harness blocks | 0 |
-
-The PR is `UNSTABLE` because the known product mismatches are intentionally
-propagated by CI. The current PR is a validation baseline, not a RailVerdict
-product fix.
-
-## Findings from PR #13
-
-| Finding | Severity | Scenarios | Observed behavior |
-|---|---|---|---|
-| [001](docs/findings/RVLAB-FINDING-001.md) | P0 | `RVLAB-REFUSE-01`, `RVLAB-REFUSE-03` | Required analyzer failure aborts without JSON and exits `1` instead of returning `INCOMPLETE/2`. |
-| [002](docs/findings/RVLAB-FINDING-002.md) | P0 | `RVLAB-16` | MCP waiver injection leaves the target present but returns repair `PASS` and exit `0`. |
-| [003](docs/findings/RVLAB-FINDING-003.md) | P1 | `RVLAB-GIT-01` | Public `git.changed_files` omits a tracked deleted file. |
-| [004](docs/findings/RVLAB-FINDING-004.md) | P1 | `RVLAB-DETERMINISM-01` | Repeated JSON differs in analyzer timing telemetry. |
-
-The generated evidence is in
-[`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md). Raw public results,
-oracle diagnostics, and candidate identity are written under `artifacts/`.
-
-## Evidence boundary
-
-The lab may create controlled external processes to reproduce operating-system
-conditions such as missing executables, malformed output, signals, and bounded
-output. It does not:
-
-- require `RailVerdict::` implementation classes;
-- require `require "rail_verdict"` from the lab scripts;
-- edit RailVerdict source;
-- replace the product's public result with an internal assumption;
-- treat a queued, skipped, or unavailable check as proof of success.
-
-The campaign validates CLI/MCP/package behavior. It does not prove hosted
-client, player, browser, or production deployment behavior.
-
-## Repository layout
-
-```text
-lab/candidate.yml          frozen candidate package and capabilities
-lab/scenarios.yml          executable scenario catalog
-scripts/lab_run            public black-box runner
-scripts/lab_oracle         independent contract oracle
-scripts/lab_collect        report generator
-scripts/mcp_client         standalone MCP black-box client
-scripts/lab_support.rb     disposable fixture/process helpers
-test/unit/                 lab infrastructure tests
-docs/VALIDATION_PLAN.md    campaign design and evidence boundary
-docs/VALIDATION_REPORT.md  latest empirical campaign report
-docs/findings/             product findings with reproductions
-artifacts/                 ignored raw campaign output
-```
-
-## Adding a scenario
-
-Add a versioned entry to `lab/scenarios.yml` with setup, public command,
-expected semantic completion, expected gate, expected exit, cleanup, and tags.
-Keep the scenario independent of RailVerdict internals. Then run the smallest
-focused category, the oracle self-test, and finally the full campaign before
-refreshing `docs/VALIDATION_REPORT.md`.
-
-The lab's contract is intentionally explicit: unexpected product behavior is
-documented as a finding while the affected scenario remains a failed assertion.
+* **Public Contract Matrix**: [`docs/contracts/RAILVERDICT-1.2.0-CONTRACT-MATRIX.md`](docs/contracts/RAILVERDICT-1.2.0-CONTRACT-MATRIX.md)
+* **Release Certification Report**: [`docs/RAILVERDICT-1.2.0-CERTIFICATION.md`](docs/RAILVERDICT-1.2.0-CERTIFICATION.md)
+* **Rails App Adoption Walkthrough**: [`docs/RAILS-APP-IMPLEMENTATION-GUIDE.md`](docs/RAILS-APP-IMPLEMENTATION-GUIDE.md)
+* **Adding a New Release to the Lab**: [`docs/ADDING-A-NEW-RAILVERDICT-RELEASE.md`](docs/ADDING-A-NEW-RAILVERDICT-RELEASE.md)
+* **CI Integration Guides**:
+  * [GitHub Actions Basic Verification](docs/integration/github-actions-basic.md)
+  * [GitHub Actions Changed Scope](docs/integration/github-actions-changed-scope.md)
+  * [GitHub Actions PR Intelligence](docs/integration/github-actions-pr-intelligence.md)
+  * [GitHub Actions Verification Receipts](docs/integration/github-actions-receipts.md)
+  * [MCP Agent Integration Protocol](docs/integration/mcp-agent.md)
+* **Defect Findings Register**: [`docs/findings/`](docs/findings/)
+* **Phase 0 PR Triage Log**: [`docs/PR-TRIAGE-1.2.0.md`](docs/PR-TRIAGE-1.2.0.md)
+* **Independent Lab Audit**: [`docs/audits/RAILVERDICT-1.2.0-LAB-AUDIT.md`](docs/audits/RAILVERDICT-1.2.0-LAB-AUDIT.md)

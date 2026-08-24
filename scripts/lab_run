@@ -241,8 +241,28 @@ def determinism(candidate, work_dir)
   second, _, second_status = LabSupport.product_run(candidate, args, cwd: work_dir)
   first_json = LabSupport.json(first)
   second_json = LabSupport.json(second)
-  pass = first_status.success? && second_status.success? && LabSupport.canonical(first_json) == LabSupport.canonical(second_json)
+  pass = first_status.success? && second_status.success? && LabSupport.stable_result_projection(first_json) == LabSupport.stable_result_projection(second_json)
   { "lab_result" => { "determinism_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def determinism_multi(candidate, work_dir, iterations = 20)
+  args = ["check", "--format", "json"]
+  first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+  first_json = LabSupport.json(first)
+  stable_base = LabSupport.stable_result_projection(first_json)
+
+  all_identical = first_status.success?
+  if all_identical
+    (iterations - 1).times do
+      run_out, _, run_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+      if !run_status.success? || LabSupport.stable_result_projection(LabSupport.json(run_out)) != stable_base
+        all_identical = false
+        break
+      end
+    end
+  end
+
+  { "lab_result" => { "determinism_multi_pass" => all_identical, "iterations" => iterations }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
 end
 
 def mcp_freshness(candidate, work_dir)
@@ -594,6 +614,8 @@ selected.each do |scenario|
                  package_surface(candidate, ROOT)
                when "determinism"
                  determinism(candidate, work_dir)
+               when "determinism_multi"
+                 determinism_multi(candidate, work_dir, command.fetch("iterations", 20))
                else
                  raise "unknown scenario interface #{interface}"
                end

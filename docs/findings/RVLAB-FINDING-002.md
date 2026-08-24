@@ -2,7 +2,7 @@
 
 ## Status
 
-OPEN
+OPEN / DOCUMENTED (Mitigated in 1.2.0 Agent Verification Protocol via Stale Receipt Rejection)
 
 ## Severity
 
