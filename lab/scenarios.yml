@@ -1,6 +1,6 @@
 schema_version: '2.0'
-catalog_version: '3.0'
-description: External black-box validation contract for the RailVerdict candidate.
+catalog_version: '4.0'
+description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED).
 check_changed: &id001
   interface: cli
   args:
