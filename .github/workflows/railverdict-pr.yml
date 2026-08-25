@@ -36,9 +36,10 @@ jobs:
           echo "Candidate source SHA: $SHA"
           if [ -z "$SHA" ]; then echo "No source_sha"; exit 1; fi
           rm -rf /tmp/RailVerdict
-          git clone --quiet https://github.com/pedro-dalben/RailVerdict.git /tmp/RailVerdict
+          git clone --quiet --no-single-branch https://github.com/pedro-dalben/RailVerdict.git /tmp/RailVerdict
+          git -C /tmp/RailVerdict fetch --quiet origin
           git -C /tmp/RailVerdict checkout --quiet "$SHA"
-          gem build /tmp/RailVerdict/rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          (cd /tmp/RailVerdict && gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem)
           sha256sum /tmp/rail_verdict-candidate.gem
           echo "CANDIDATE_GEM=/tmp/rail_verdict-candidate.gem" >> $GITHUB_ENV
       - name: Run category
