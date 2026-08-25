@@ -29,12 +29,28 @@ jobs:
         with:
           ruby-version: "3.4"
           bundler-cache: true
+      - name: Build RailVerdict candidate gem (handles unpublished 1.3.0)
+        run: |
+          set -e
+          SHA=$(ruby -ryaml -e "puts YAML.load_file('lab/candidate.yml')['candidate']['source_sha']")
+          echo "Candidate source SHA: $SHA"
+          if [ -z "$SHA" ]; then echo "No source_sha"; exit 1; fi
+          rm -rf /tmp/RailVerdict
+          git clone --quiet https://github.com/pedro-dalben/RailVerdict.git /tmp/RailVerdict
+          git -C /tmp/RailVerdict checkout --quiet "$SHA"
+          gem build /tmp/RailVerdict/rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem
+          sha256sum /tmp/rail_verdict-candidate.gem
+          echo "CANDIDATE_GEM=/tmp/rail_verdict-candidate.gem" >> $GITHUB_ENV
       - name: Run category
         env:
           BUNDLE_PATH: ${{ github.workspace }}/vendor/bundle
         run: |
           set +e
-          scripts/lab_run --category "${{ matrix.category }}"
+          if [ -f "$CANDIDATE_GEM" ]; then
+            scripts/lab_run --category "${{ matrix.category }}" --artifact "$CANDIDATE_GEM"
+          else
+            scripts/lab_run --category "${{ matrix.category }}"
+          fi
           status=$?
           scripts/lab_collect
           exit "$status"
