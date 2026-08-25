@@ -52,14 +52,14 @@ module LabSupport
 
   def fixture_env(env, cwd)
     env = env.dup
+    # Do not set BUNDLE_GEMFILE for railverdict candidate runs; it causes Gem.use_gemdeps wrapper to fail
+    # when rail_verdict is not in the fixture's Gemfile. Bundler will still find Gemfile via cwd.
+    # Only set BUNDLE_PATH config if needed without BUNDLE_GEMFILE.
     gemfile = File.join(cwd, "Gemfile")
-    if File.file?(gemfile)
-      env["BUNDLE_GEMFILE"] = gemfile
-      if env["BUNDLE_PATH"] && !env["BUNDLE_PATH"].empty?
-        bundle_config = File.join(cwd, ".bundle", "config")
-        FileUtils.mkdir_p(File.dirname(bundle_config))
-        File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
-      end
+    if File.file?(gemfile) && env["BUNDLE_PATH"] && !env["BUNDLE_PATH"].empty?
+      bundle_config = File.join(cwd, ".bundle", "config")
+      FileUtils.mkdir_p(File.dirname(bundle_config))
+      File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
     end
     env
   end
