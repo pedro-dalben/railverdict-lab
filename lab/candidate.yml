@@ -1,15 +1,15 @@
 schema_version: '2.0'
-catalog_version: '2.0'
+catalog_version: '3.0'
 candidate:
   mode: published
   gem_name: rail_verdict
   gem_version: 1.3.0
   repository: https://github.com/pedro-dalben/RailVerdict.git
-  source_sha: fe2ae749f04528f890278570c1ed25316ad82e48
+  source_sha: 980e94012d2ed5c85629017b9d4f62e993c264c8
   tag: v1.3.0
-  gem_sha256: 6e0c3c1c7d94afba37393b385fd1379807166e20b2dc632387736ea5cf50a9a3
-  frozen_at: '2026-08-25T01:00:00Z'
-  scenario_catalog_version: '2.0'
+  gem_sha256: 1405a7734e6b2acee56285f544a5508e554e6dd1cad6b089438207d09650bdf0
+  frozen_at: '2026-08-25T16:35:00Z'
+  scenario_catalog_version: '3.0'
 environment:
   ruby_version: 3.4.5
   rails_version: 8.1.3.1
