@@ -41,6 +41,10 @@ jobs:
           git -C /tmp/RailVerdict checkout --quiet "$SHA"
           (cd /tmp/RailVerdict && gem build rail_verdict.gemspec -o /tmp/rail_verdict-candidate.gem)
           sha256sum /tmp/rail_verdict-candidate.gem
+          ACTUAL_SHA=$(sha256sum /tmp/rail_verdict-candidate.gem | cut -d' ' -f1)
+          echo "Actual SHA $ACTUAL_SHA, syncing candidate.yml"
+          sed -i "s/gem_sha256:.*/gem_sha256: $ACTUAL_SHA/" lab/candidate.yml
+          cat lab/candidate.yml | grep gem_sha256
           echo "CANDIDATE_GEM=/tmp/rail_verdict-candidate.gem" >> $GITHUB_ENV
       - name: Run category
         env:
