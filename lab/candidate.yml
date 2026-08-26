@@ -1,37 +1,61 @@
-schema_version: "2.0"
-catalog_version: "2.0"
-
+schema_version: '2.0'
+catalog_version: '4.1'
 candidate:
-  mode: "published"
-  gem_name: "rail_verdict"
-  gem_version: "1.2.0"
-  repository: "https://github.com/pedro-dalben/RailVerdict.git"
-  source_sha: "d49c204b36fe89a6fcf5f22fd4c42978362b10d2"
-  tag: "v1.2.0"
-  gem_sha256: "d8e848b1e72585b7f583a85d2a67e25b472bd1860549d1d4330c8a33104f82e9"
-  frozen_at: "2026-08-24T16:28:04Z"
-  scenario_catalog_version: "2.0"
-
+  mode: candidate
+  gem_name: rail_verdict
+  gem_version: 1.4.0
+  repository: https://github.com/pedro-dalben/RailVerdict.git
+  source_sha: a0a5ca38239f29450d32610f741be70130dca561
+  tag: v1.4.0
+  gem_sha256: 9a84eb95eefc3e4bf26a70e130852df2061a3d39a978cdbea2d1f40126f3b92b
+  frozen_at: '2026-08-26T10:30:00Z'
+  scenario_catalog_version: '4.1'
 environment:
-  ruby_version: "3.4.5"
-  rails_version: "8.1.3.1"
-  git_version: "2.43.0"
-  os: "linux"
-
+  ruby_version: 3.4.5
+  rails_version: 8.1.3.1
+  git_version: 2.43.0
+  os: linux
 analyzers:
-  rubocop: "1.89.0"
-  rubocop_rails: "2.37.0"
-  minitest: "6.0.6"
-  rspec: "3.13.6"
-  simplecov: "1.0"
-  bundler_audit: "0.9.3"
-
+  rubocop: 1.89.0
+  rubocop_rails: 2.37.0
+  minitest: 6.0.6
+  rspec: 3.13.6
+  simplecov: '1.0'
+  bundler_audit: 0.9.3
 capabilities:
-  cli: [init, doctor, check, pr, findings, baseline, explain, investigate, repair, receipt, mcp]
-  mcp: [initialize, tools/list, verify, list_findings, get_finding, build_repair_packet, verify_repair, explain, investigate, get_verification_receipt, get_pr_intelligence]
+  cli:
+  - init
+  - doctor
+  - check
+  - pr
+  - findings
+  - baseline
+  - explain
+  - investigate
+  - repair
+  - receipt
+  - handoff
+  - mcp
+  mcp:
+  - initialize
+  - tools/list
+  - verify
+  - list_findings
+  - get_finding
+  - build_repair_packet
+  - verify_repair
+  - explain
+  - investigate
+  - get_verification_receipt
+  - get_pr_intelligence
+  - create_handoff
+  - inspect_handoff
+  - verify_handoff
   pr_intelligence: true
   per_analyzer_timeout: true
   repository_state_identity: true
   verification_receipts: true
   snapshot_guard: true
   native_simplecov: true
+  handoff: true
+  evidence_reuse: true

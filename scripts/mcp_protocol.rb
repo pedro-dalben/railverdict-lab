@@ -26,7 +26,10 @@ class LabMCPClient
     @stdin.puts(JSON.generate(request))
     @stdin.flush
     line = @stdout.gets
-    raise "MCP server closed stdout while handling #{method}" unless line
+    unless line
+      err = @stderr.read rescue ""
+      raise "MCP server closed stdout while handling #{method}; stderr=#{err[0,2000].inspect}"
+    end
 
     response = JSON.parse(line)
     @trace << { "method" => method, "params" => params, "response" => response }

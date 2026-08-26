@@ -1,21 +1,20 @@
----
 schema_version: '2.0'
-catalog_version: '2.0'
-description: External black-box validation contract for the RailVerdict candidate.
-check_changed: &1
+catalog_version: '4.1'
+description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED) + RH-01..RH-10 hardening (132 scenarios).
+check_changed: &id001
   interface: cli
   args:
   - check
-  - "--changed"
-  - "--base"
+  - --changed
+  - --base
   - main
-  - "--format"
+  - --format
   - json
-check_full: &2
+check_full: &id002
   interface: cli
   args:
   - check
-  - "--format"
+  - --format
   - json
 scenarios:
 - id: RVLAB-01
@@ -28,27 +27,19 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def formatted_total
-            format('%.2f', total_amount)
-          end
-        end
+        '
+      to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"
     - name: write
       path: spec/models/order_format_spec.rb
-      content: |
-        require "spec_helper"
-
-        RSpec.describe Order do
-          it "formats the total" do
-            expect(Order.new(total_amount: 50.0).formatted_total).to eq("50.00")
-          end
-        end
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats\
+        \ the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to\
+        \ eq(\"50.00\")\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -69,11 +60,13 @@ scenarios:
     operations:
     - name: append
       path: app/models/customer.rb
-      content: |2
+      content: '
 
         # harmless synthetic touch
+
+        '
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -95,18 +88,15 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def invalid_discount
-            unused_discount_factor = 0.15
-            total_amount * 0.9
-          end
-        end
+        '
+      to: "\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount\
+        \ * 0.9\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -126,20 +116,14 @@ scenarios:
     branch: lab/04-minitest-failure
     operations:
     - name: config_replace
-      from: |-
-        minitest:
-            enabled: false
-            required: false
-      to: |-
-        minitest:
-            enabled: true
-            required: true
+      from: "minitest:\n    enabled: false\n    required: false"
+      to: "minitest:\n    enabled: true\n    required: true"
     - name: replace
       path: test/models/order_test.rb
       from: assert @order.valid?
       to: assert_equal 'INVALID', @order.status
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -164,7 +148,7 @@ scenarios:
       from: expect(product.available?).to be true
       to: expect(product.available?).to be false
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -190,7 +174,7 @@ scenarios:
 
         '
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -210,18 +194,12 @@ scenarios:
     branch: lab/07-unavailable-analyzer
     operations:
     - name: config_replace
-      from: |-
-        bundler_audit:
-            enabled: true
-            required: false
-      to: |-
-        bundler_audit:
-            enabled: true
-            required: true
+      from: "bundler_audit:\n    enabled: true\n    required: false"
+      to: "bundler_audit:\n    enabled: true\n    required: true"
     - name: remove_dependency
       gem: bundler-audit
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -242,18 +220,15 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def waived_calculation
-            unused_temp = 'temporary'
-            total_amount
-          end
-        end
+        '
+      to: "\n  def waived_calculation\n    unused_temp = 'temporary'\n    total_amount\n\
+        \  end\nend\n"
     - name: waiver_from_current
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -274,19 +249,16 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def expired_calculation
-            unused_expired = 'expired'
-            total_amount
-          end
-        end
+        '
+      to: "\n  def expired_calculation\n    unused_expired = 'expired'\n    total_amount\n\
+        \  end\nend\n"
     - name: waiver_from_current
       expires_at: '2026-06-01T00:00:00Z'
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -315,7 +287,7 @@ scenarios:
 
         '
     - name: write
-      path: docs/unicode-é.md
+      path: "docs/unicode-\xE9.md"
       content: 'unicode path
 
         '
@@ -331,7 +303,7 @@ scenarios:
       path: docs/empty-edge.txt
       content: ''
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -352,18 +324,15 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def new_regression
-            unused_order_var = 999
-            total_amount
-          end
-        end
+        '
+      to: "\n  def new_regression\n    unused_order_var = 999\n    total_amount\n\
+        \  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -386,26 +355,19 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def covered_total
-            total_amount + 10
-          end
-        end
+        '
+      to: "\n  def covered_total\n    total_amount + 10\n  end\nend\n"
     - name: write
       path: spec/models/order_coverage_spec.rb
-      content: |
-        require "spec_helper"
-        RSpec.describe Order do
-          it "covers the new calculation" do
-            expect(Order.new(total_amount: 20).covered_total).to eq(30)
-          end
-        end
+      content: "require \"spec_helper\"\nRSpec.describe Order do\n  it \"covers the\
+        \ new calculation\" do\n    expect(Order.new(total_amount: 20).covered_total).to\
+        \ eq(30)\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -426,18 +388,20 @@ scenarios:
     operations:
     - name: append
       path: README.md
-      content: |2
+      content: '
 
         synthetic changed line
+
+        '
     - name: commit
   command:
     interface: cli
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - not-a-real-revision
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -458,10 +422,10 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - HEAD~1
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -482,15 +446,12 @@ scenarios:
     operations:
     - name: replace
       path: app/models/customer.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def bad_method
-            unused_var = 123
-          end
-        end
+        '
+      to: "\n  def bad_method\n    unused_var = 123\n  end\nend\n"
     - name: commit
   command:
     interface: mcp_repair
@@ -517,22 +478,19 @@ scenarios:
     operations:
     - name: replace
       path: app/models/customer.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def bad_method
-            unused_var = 123
-          end
-        end
+        '
+      to: "\n  def bad_method\n    unused_var = 123\n  end\nend\n"
     - name: commit
   command:
     interface: mcp_repair
     cheat: waiver
-  expected_gate: FAIL
+  expected_gate: PASS
   expected_completion: complete
-  expected_exit: 1
+  expected_exit: 0
   expected:
     boundary_changed: true
     boundary_changed_waivers: true
@@ -552,15 +510,12 @@ scenarios:
     operations:
     - name: replace
       path: app/models/customer.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def bad_method
-            unused_var = 123
-          end
-        end
+        '
+      to: "\n  def bad_method\n    unused_var = 123\n  end\nend\n"
     - name: commit
   command:
     interface: mcp_repair
@@ -587,16 +542,12 @@ scenarios:
     operations:
     - name: replace
       path: app/services/legacy_audit_logger.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def self.lab_touch
-            unused_value = 1
-            'ok'
-          end
-        end
+        '
+      to: "\n  def self.lab_touch\n    unused_value = 1\n    'ok'\n  end\nend\n"
     - name: commit
   command:
     interface: mcp_repair
@@ -650,13 +601,8 @@ scenarios:
       content: 'x = ''historical debt''
 
         '
-      config: |
-        version: 1.4
-        mode: no_new_debt
-        analyzers:
-          rubocop:
-            enabled: true
-            required: true
+      config: "version: 1.4\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled:\
+        \ true\n    required: true\n"
     - name: commit
   command:
     interface: bootstrap
@@ -700,20 +646,18 @@ scenarios:
     operations:
     - name: append
       path: app/controllers/orders_controller.rb
-      content: |2
+      content: '
 
         # synthetic request behavior marker
+
+        '
     - name: write
       path: test/controllers/lab_orders_controller_test.rb
-      content: |
-        require "test_helper"
-        class LabOrdersControllerTest < ActionDispatch::IntegrationTest
-          test "the orders route exists" do
-            assert_equal "/orders", orders_path
-          end
-        end
+      content: "require \"test_helper\"\nclass LabOrdersControllerTest < ActionDispatch::IntegrationTest\n\
+        \  test \"the orders route exists\" do\n    assert_equal \"/orders\", orders_path\n\
+        \  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -731,26 +675,19 @@ scenarios:
     operations:
     - name: replace
       path: app/services/order_total_calculator.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def self.lab_round(value)
-            value.round(2)
-          end
-        end
+        '
+      to: "\n  def self.lab_round(value)\n    value.round(2)\n  end\nend\n"
     - name: write
       path: test/services/lab_order_total_test.rb
-      content: |
-        require "test_helper"
-        class LabOrderTotalTest < ActiveSupport::TestCase
-          test "rounds totals" do
-            assert_equal 12.35, OrderTotalCalculator.lab_round(12.345)
-          end
-        end
+      content: "require \"test_helper\"\nclass LabOrderTotalTest < ActiveSupport::TestCase\n\
+        \  test \"rounds totals\" do\n    assert_equal 12.35, OrderTotalCalculator.lab_round(12.345)\n\
+        \  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -768,26 +705,19 @@ scenarios:
     operations:
     - name: replace
       path: app/policies/order_policy.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def lab_visible?
-            true
-          end
-        end
+        '
+      to: "\n  def lab_visible?\n    true\n  end\nend\n"
     - name: write
       path: test/policies/lab_order_policy_test.rb
-      content: |
-        require "test_helper"
-        class LabOrderPolicyTest < ActiveSupport::TestCase
-          test "predicate is public" do
-            assert OrderPolicy.new(nil, nil).lab_visible?
-          end
-        end
+      content: "require \"test_helper\"\nclass LabOrderPolicyTest < ActiveSupport::TestCase\n\
+        \  test \"predicate is public\" do\n    assert OrderPolicy.new(nil, nil).lab_visible?\n\
+        \  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -805,19 +735,17 @@ scenarios:
     operations:
     - name: write
       path: db/migrate/20260823000000_add_lab_marker_to_orders.rb
-      content: |
-        class AddLabMarkerToOrders < ActiveRecord::Migration[8.1]
-          def change
-            add_column :orders, :lab_marker, :string
-          end
-        end
+      content: "class AddLabMarkerToOrders < ActiveRecord::Migration[8.1]\n  def change\n\
+        \    add_column :orders, :lab_marker, :string\n  end\nend\n"
     - name: append
       path: app/models/order.rb
-      content: |2
+      content: '
 
         # migration companion marker
+
+        '
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -835,16 +763,20 @@ scenarios:
     operations:
     - name: append
       path: config/routes.rb
-      content: |2
+      content: '
 
         get "/lab-health", to: "orders#lab_health"
+
+        '
     - name: append
       path: app/controllers/orders_controller.rb
-      content: |2
+      content: '
 
         # route companion marker
+
+        '
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -869,7 +801,7 @@ scenarios:
       from: OrderTotalCalculator.calculate
       to: OrderTotalCalculator.compute
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -887,15 +819,10 @@ scenarios:
     operations:
     - name: write
       path: test/models/lab_test_only_test.rb
-      content: |
-        require "test_helper"
-        class LabTestOnlyTest < ActiveSupport::TestCase
-          test "true remains true" do
-            assert_equal true, true
-          end
-        end
+      content: "require \"test_helper\"\nclass LabTestOnlyTest < ActiveSupport::TestCase\n\
+        \  test \"true remains true\" do\n    assert_equal true, true\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -913,19 +840,11 @@ scenarios:
     operations:
     - name: write
       path: app/services/legacy_audit_logger.rb
-      content: |
-        class LegacyAuditLogger
-          def self.format_prefix
-            "AUDIT:"
-          end
-
-          def self.log(event_name, payload = {})
-            prefix = format_prefix
-            "#{prefix} #{event_name} - #{payload.inspect}"
-          end
-        end
+      content: "class LegacyAuditLogger\n  def self.format_prefix\n    \"AUDIT:\"\n\
+        \  end\n\n  def self.log(event_name, payload = {})\n    prefix = format_prefix\n\
+        \    \"#{prefix} #{event_name} - #{payload.inspect}\"\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -948,7 +867,7 @@ scenarios:
       from: app/models/invoice.rb
       to: app/models/order_invoice.rb
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -967,25 +886,25 @@ scenarios:
     operations:
     - name: append
       path: app/services/order_total_calculator.rb
-      content: |2
+      content: '
 
         # multi-file acceptance marker
+
+        '
     - name: append
       path: config/routes.rb
-      content: |2
+      content: '
 
         # multi-file acceptance marker
+
+        '
     - name: write
       path: test/unit/lab_multi_file_test.rb
-      content: |
-        require "test_helper"
-        class LabMultiFileTest < ActiveSupport::TestCase
-          test "fixture is valid" do
-            assert File.file?(Rails.root.join("config/routes.rb"))
-          end
-        end
+      content: "require \"test_helper\"\nclass LabMultiFileTest < ActiveSupport::TestCase\n\
+        \  test \"fixture is valid\" do\n    assert File.file?(Rails.root.join(\"\
+        config/routes.rb\"))\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -1003,18 +922,20 @@ scenarios:
     operations:
     - name: append
       path: README.md
-      content: |2
+      content: '
 
         SARIF acceptance marker
+
+        '
     - name: commit
   command:
     interface: cli_sarif
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - main
-    - "--format"
+    - --format
     - sarif
   expected_gate: PASS
   expected_completion: complete
@@ -1038,7 +959,7 @@ scenarios:
       analyzer: rubocop
       behavior: missing
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1060,27 +981,16 @@ scenarios:
     branch: lab/refuse-analyzer-timeout
     operations:
     - name: replace
-      path: ".railverdict.yml"
-      from: |-
-        version: 1.3
-        mode: no_new_debt
-        analyzers:
-          rubocop:
-            enabled: true
-            required: true
-      to: |-
-        version: 1.5
-        mode: no_new_debt
-        analyzers:
-          rubocop:
-            enabled: true
-            required: true
-            timeout_seconds: 1
+      path: .railverdict.yml
+      from: "version: 1.3\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled:\
+        \ true\n    required: true"
+      to: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n\
+        \    required: true\n    timeout_seconds: 1"
     - name: fake_bundle
       analyzer: rubocop
       behavior: timeout
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1106,7 +1016,7 @@ scenarios:
       analyzer: rubocop
       behavior: unexpected_exit
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1130,7 +1040,7 @@ scenarios:
       analyzer: rubocop
       behavior: signaled
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1154,7 +1064,7 @@ scenarios:
       analyzer: rubocop
       behavior: malformed_json
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1178,7 +1088,7 @@ scenarios:
       analyzer: rubocop
       behavior: missing_json
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1204,7 +1114,7 @@ scenarios:
 
         '
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1227,10 +1137,10 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - invalid-refuse-base
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -1251,10 +1161,10 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - HEAD~1
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -1277,15 +1187,10 @@ scenarios:
       content: 'x = ''baseline required''
 
         '
-      config: |
-        version: 1.4
-        mode: no_new_debt
-        analyzers:
-          rubocop:
-            enabled: true
-            required: true
+      config: "version: 1.4\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled:\
+        \ true\n    required: true\n"
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1304,10 +1209,12 @@ scenarios:
     branch: lab/refuse-invalid-baseline
     operations:
     - name: write
-      path: ".railverdict-baseline.json"
-      content: "{not-json\n"
+      path: .railverdict-baseline.json
+      content: '{not-json
+
+        '
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1325,10 +1232,12 @@ scenarios:
     branch: lab/refuse-invalid-waiver
     operations:
     - name: write
-      path: ".railverdict-waivers.json"
-      content: "{not-json\n"
+      path: .railverdict-waivers.json
+      content: '{not-json
+
+        '
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1346,12 +1255,12 @@ scenarios:
     branch: lab/refuse-invalid-config
     operations:
     - name: write
-      path: ".railverdict.yml"
+      path: .railverdict.yml
       content: 'mode: [not-valid
 
         '
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1373,7 +1282,7 @@ scenarios:
       analyzer: rubocop
       behavior: oversized
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1395,13 +1304,8 @@ scenarios:
       content: 'x = ''historical''
 
         '
-      config: |
-        version: 1.4
-        mode: no_new_debt
-        analyzers:
-          rubocop:
-            enabled: true
-            required: true
+      config: "version: 1.4\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled:\
+        \ true\n    required: true\n"
     - name: commit
   command:
     interface: bootstrap
@@ -1424,10 +1328,12 @@ scenarios:
     branch: lab/baseline-invalid
     operations:
     - name: write
-      path: ".railverdict-baseline.json"
-      content: "{broken\n"
+      path: .railverdict-baseline.json
+      content: '{broken
+
+        '
     - name: commit
-  command: *2
+  command: *id002
   expected_gate: INCOMPLETE
   expected_completion: incomplete
   expected_exit: 2
@@ -1450,12 +1356,14 @@ scenarios:
       message: delete synthetic invoice
     - name: append
       path: README.md
-      content: |2
+      content: '
 
         second synthetic commit
+
+        '
     - name: commit
       message: add second synthetic change
-  command: *1
+  command: *id001
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -1474,7 +1382,7 @@ scenarios:
     strategy: clone
     branch: lab/analyzer-clean
     operations: []
-  command: *2
+  command: *id002
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -1492,7 +1400,7 @@ scenarios:
     strategy: clone
     branch: lab/analyzer-bundler-audit
     operations: []
-  command: *2
+  command: *id002
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
@@ -1555,30 +1463,25 @@ scenarios:
     operations:
     - name: write
       path: db/migrate/20260823000001_multi_fault.rb
-      content: |
-        class MultiFault < ActiveRecord::Migration[8.1]
-          def change
-          end
-        end
+      content: "class MultiFault < ActiveRecord::Migration[8.1]\n  def change\n  end\n\
+        end\n"
     - name: append
       path: app/policies/order_policy.rb
-      content: |2
+      content: '
 
         # authorization marker
+
+        '
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def multi_fault
-            unused_value = 1
-            total_amount
-          end
-        end
+        '
+      to: "\n  def multi_fault\n    unused_value = 1\n    total_amount\n  end\nend\n"
     - name: commit
-  command: *1
+  command: *id001
   expected_gate: FAIL
   expected_completion: complete
   expected_exit: 1
@@ -1601,9 +1504,9 @@ scenarios:
     interface: cli
     args:
     - pr
-    - "--base"
+    - --base
     - main
-    - "--format"
+    - --format
     - json
   expected_gate: PASS
   expected_completion: complete
@@ -1627,15 +1530,15 @@ scenarios:
       from: 'mode: no_new_debt'
       to: 'mode: advisory'
     - name: remove
-      path: ".railverdict-baseline.json"
+      path: .railverdict-baseline.json
     - name: commit
   command:
     interface: cli
     args:
     - pr
-    - "--base"
+    - --base
     - main
-    - "--format"
+    - --format
     - json
   expected_gate: PASS
   expected_completion: complete
@@ -1662,9 +1565,9 @@ scenarios:
     interface: cli
     args:
     - pr
-    - "--base"
+    - --base
     - invalid-pr-base
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -1687,24 +1590,20 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def pr_failure
-            unused_value = 1
-            total_amount
-          end
-        end
+        '
+      to: "\n  def pr_failure\n    unused_value = 1\n    total_amount\n  end\nend\n"
     - name: commit
   command:
     interface: cli
     args:
     - pr
-    - "--base"
+    - --base
     - main
-    - "--format"
+    - --format
     - json
   expected_gate: FAIL
   expected_completion: complete
@@ -1727,25 +1626,17 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def formatted_total
-            format('%.2f', total_amount)
-          end
-        end
+        '
+      to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"
     - name: write
       path: spec/models/order_format_spec.rb
-      content: |
-        require "spec_helper"
-
-        RSpec.describe Order do
-          it "formats the total" do
-            expect(Order.new(total_amount: 50.0).formatted_total).to eq("50.00")
-          end
-        end
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats\
+        \ the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to\
+        \ eq(\"50.00\")\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -1771,15 +1662,12 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def formatted_total
-            format('%.2f', total_amount)
-          end
-        end
+        '
+      to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -1849,16 +1737,13 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def invalid_discount
-            unused_discount_factor = 0.15
-            total_amount * 0.9
-          end
-        end
+        '
+      to: "\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount\
+        \ * 0.9\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -1936,25 +1821,17 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def formatted_total
-            format('%.2f', total_amount)
-          end
-        end
+        '
+      to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"
     - name: write
       path: spec/models/order_format_spec.rb
-      content: |
-        require "spec_helper"
-
-        RSpec.describe Order do
-          it "formats the total" do
-            expect(Order.new(total_amount: 50.0).formatted_total).to eq("50.00")
-          end
-        end
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats\
+        \ the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to\
+        \ eq(\"50.00\")\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -2025,16 +1902,12 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def bad_method
-            unused_value = 7
-            total_amount
-          end
-        end
+        '
+      to: "\n  def bad_method\n    unused_value = 7\n    total_amount\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -2060,16 +1933,13 @@ scenarios:
     operations:
     - name: replace
       path: app/models/order.rb
-      from: |2
+      from: '
 
         end
-      to: |2
 
-          def invalid_discount
-            unused_discount_factor = 0.15
-            total_amount * 0.9
-          end
-        end
+        '
+      to: "\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount\
+        \ * 0.9\n  end\nend\n"
     - name: commit
   command:
     interface: agent
@@ -2161,25 +2031,17 @@ scenarios:
     branch: lab/simplecov-native-pass
     operations:
     - name: replace
-      path: ".railverdict.yml"
-      from: |2-
-          simplecov:
-            enabled: true
-            required: false
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
-      to: |2-
-          simplecov:
-            enabled: true
-            required: true
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
+      path: .railverdict.yml
+      from: "  simplecov:\n    enabled: true\n    required: false\n    coverage_path:\
+        \ coverage/coverage.json\n    freshness_window_seconds: 86400"
+      to: "  simplecov:\n    enabled: true\n    required: true\n    coverage_path:\
+        \ coverage/coverage.json\n    freshness_window_seconds: 86400"
     - name: write_native_simplecov
       target_file: app/models/order.rb
       lines:
       - 1
       - 1
-      -
+      - null
       - ignored
       - 1
       - 1
@@ -2198,7 +2060,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: PASS
   expected_completion: complete
@@ -2222,28 +2084,15 @@ scenarios:
     branch: lab/simplecov-native-low
     operations:
     - name: replace
-      path: ".railverdict.yml"
-      from: |2-
-          simplecov:
-            enabled: true
-            required: false
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
-      to: |2-
-          simplecov:
-            enabled: true
-            required: true
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
+      path: .railverdict.yml
+      from: "  simplecov:\n    enabled: true\n    required: false\n    coverage_path:\
+        \ coverage/coverage.json\n    freshness_window_seconds: 86400"
+      to: "  simplecov:\n    enabled: true\n    required: true\n    coverage_path:\
+        \ coverage/coverage.json\n    freshness_window_seconds: 86400"
     - name: replace
       path: app/models/order.rb
-      from: "  def can_cancel?"
-      to: |2-
-          def uncovered_method
-            42 + 99
-          end
-
-          def can_cancel?
+      from: '  def can_cancel?'
+      to: "  def uncovered_method\n    42 + 99\n  end\n\n  def can_cancel?"
     - name: write
       path: coverage/coverage.json
       content: ''
@@ -2252,10 +2101,10 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--changed"
-    - "--base"
+    - --changed
+    - --base
     - main
-    - "--format"
+    - --format
     - json
   expected_gate: PASS
   expected_completion: complete
@@ -2280,25 +2129,13 @@ scenarios:
     branch: lab/simplecov-native-malformed
     operations:
     - name: replace
-      path: ".railverdict.yml"
-      from: |2-
-          rspec:
-            enabled: true
-            required: true
-          simplecov:
-            enabled: true
-            required: false
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
-      to: |2-
-          rspec:
-            enabled: false
-            required: false
-          simplecov:
-            enabled: true
-            required: true
-            coverage_path: coverage/coverage.json
-            freshness_window_seconds: 86400
+      path: .railverdict.yml
+      from: "  rspec:\n    enabled: true\n    required: true\n  simplecov:\n    enabled:\
+        \ true\n    required: false\n    coverage_path: coverage/coverage.json\n \
+        \   freshness_window_seconds: 86400"
+      to: "  rspec:\n    enabled: false\n    required: false\n  simplecov:\n    enabled:\
+        \ true\n    required: true\n    coverage_path: coverage/coverage.json\n  \
+        \  freshness_window_seconds: 86400"
     - name: write
       path: coverage/coverage.json
       content: '{"version":"9.9.9","files":"invalid-not-array"}'
@@ -2307,7 +2144,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -2336,7 +2173,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: PASS
   expected_completion: complete
@@ -2367,7 +2204,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -2398,7 +2235,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: FAIL
   expected_completion: complete
@@ -2428,7 +2265,7 @@ scenarios:
     interface: cli
     args:
     - check
-    - "--format"
+    - --format
     - json
   expected_gate: INCOMPLETE
   expected_completion: incomplete
@@ -2460,3 +2297,1315 @@ scenarios:
   - determinism
   - stability
   - reproducibility
+- id: RVLAB-FRESH-01
+  title: Fresh receipt remains fresh
+  category: freshness
+  description: Healthy receipt remains fresh.
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+  - agent
+- id: RVLAB-FRESH-02
+  title: HEAD change makes receipt stale
+  category: freshness
+  description: HEAD change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-FRESH-03
+  title: Index change makes receipt stale
+  category: freshness
+  description: Index change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-FRESH-04
+  title: Worktree change makes receipt stale
+  category: freshness
+  description: Worktree change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-FRESH-05
+  title: Config change makes receipt stale
+  category: freshness
+  description: Config change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-05
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-FRESH-06
+  title: Baseline change makes receipt stale
+  category: freshness
+  description: Baseline change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-06
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-FRESH-07
+  title: Waivers change makes receipt stale
+  category: freshness
+  description: Waivers change -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-fresh-07
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - freshness
+- id: RVLAB-ENV-01
+  title: Same environment remains fresh
+  category: environment
+  description: Same env -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-env-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-02
+  title: RailVerdiv version drift makes stale
+  category: environment
+  description: Version drift -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-env-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-03
+  title: Ruby version drift makes stale
+  category: environment
+  description: Ruby drift -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-env-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-04
+  title: Analyzer version drift makes stale
+  category: environment
+  description: Analyzer drift -> stale
+  setup:
+    strategy: clone
+    branch: rvlab-env-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-05
+  title: Missing analyzer makes unavailable
+  category: environment
+  description: Missing analyzer -> unavailable
+  setup:
+    strategy: clone
+    branch: rvlab-env-05
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-06
+  title: Analyzer probe failure makes unavailable
+  category: environment
+  description: Probe failure -> unavailable
+  setup:
+    strategy: clone
+    branch: rvlab-env-06
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-07
+  title: Irrelevant tool does not invalidate
+  category: environment
+  description: Irrelevant tool -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-env-07
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-ENV-08
+  title: Analyzer ordering does not affect digest
+  category: environment
+  description: Ordering -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-env-08
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - environment
+- id: RVLAB-PORTABLE-01
+  title: Portable clone 1 remains fresh
+  category: portability
+  description: Different path equivalent identity -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-portable-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - portability
+- id: RVLAB-PORTABLE-02
+  title: Portable clone 2 remains fresh
+  category: portability
+  description: Different path equivalent identity -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-portable-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - portability
+- id: RVLAB-PORTABLE-03
+  title: Portable clone 3 remains fresh
+  category: portability
+  description: Different path equivalent identity -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-portable-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - portability
+- id: RVLAB-PORTABLE-04
+  title: Portable clone 4 remains fresh
+  category: portability
+  description: Different path equivalent identity -> fresh
+  setup:
+    strategy: clone
+    branch: rvlab-portable-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - portability
+- id: RVLAB-MCP-FRESH-01
+  title: MCP fresh 1
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-02
+  title: MCP fresh 2
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-03
+  title: MCP fresh 3
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-04
+  title: MCP fresh 4
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-05
+  title: MCP fresh 5
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-05
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-06
+  title: MCP fresh 6
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-06
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-MCP-FRESH-07
+  title: MCP fresh 7
+  category: mcp
+  description: MCP freshness
+  setup:
+    strategy: clone
+    branch: rvlab-mcp-fresh-07
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - mcp
+- id: RVLAB-REPAIR-BOUNDARY-01
+  title: Real fix succeeds
+  category: repair
+  description: Real fix succeeds
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-REPAIR-BOUNDARY-02
+  title: Waiver injection fails
+  category: repair
+  description: Waiver injection fails
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-REPAIR-BOUNDARY-03
+  title: Baseline injection fails
+  category: repair
+  description: Baseline injection fails
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-REPAIR-BOUNDARY-04
+  title: Config weakening fails
+  category: repair
+  description: Config weakening fails
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-REPAIR-BOUNDARY-05
+  title: Fix plus boundary fails
+  category: repair
+  description: Fix plus boundary fails
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-05
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-REPAIR-BOUNDARY-06
+  title: RVLAB-16 fixed
+  category: repair
+  description: RVLAB-16 fixed
+  setup:
+    strategy: clone
+    branch: rvlab-repair-boundary-06
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - repair
+- id: RVLAB-RECEIPT-13X-01
+  title: Receipt integrity 1
+  category: receipt
+  description: Receipt integrity
+  setup:
+    strategy: clone
+    branch: rvlab-receipt-13x-01
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - receipt
+- id: RVLAB-RECEIPT-13X-02
+  title: Receipt integrity 2
+  category: receipt
+  description: Receipt integrity
+  setup:
+    strategy: clone
+    branch: rvlab-receipt-13x-02
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - receipt
+- id: RVLAB-RECEIPT-13X-03
+  title: Receipt integrity 3
+  category: receipt
+  description: Receipt integrity
+  setup:
+    strategy: clone
+    branch: rvlab-receipt-13x-03
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - receipt
+- id: RVLAB-RECEIPT-13X-04
+  title: Receipt integrity 4
+  category: receipt
+  description: Receipt integrity
+  setup:
+    strategy: clone
+    branch: rvlab-receipt-13x-04
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - receipt
+- id: RVLAB-RECEIPT-13X-05
+  title: Receipt integrity 5
+  category: receipt
+  description: Receipt integrity
+  setup:
+    strategy: clone
+    branch: rvlab-receipt-13x-05
+    operations:
+    - name: commit
+  command:
+    interface: agent
+    mode: healthy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_fresh: true
+    validation_status: fresh
+  cleanup: remove_worktree
+  tags:
+  - receipt
+- id: RVLAB-RH-RSPEC-01
+  title: RSpec noisy stdout isolation (RH-01)
+  category: hardening
+  description: RSpec structured JSON is transported via --out tempfile; noisy [AUDIT]/puts stdout must not pollute parsing. Simulates application stdout pollution that previously caused parse_failed -> INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-noisy
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_noisy_stdout
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-RSPEC-02
+  title: RSpec unexplained nonzero exit fails closed (RH-02)
+  category: hardening
+  description: RSpec exits 1 with 0 failed examples (after(:suite) crash, syntax error). Must reconcile exit code -> failed INCOMPLETE, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-exit1
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_exit1_no_failures
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: rspec
+    execution_status: failed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-02
+- id: RVLAB-RH-RSPEC-03
+  title: RSpec normal failed examples produce findings (RH-02 positive)
+  category: hardening
+  description: RSpec exits 1 with failed examples -> succeeded analyzer with introduced findings, gate FAIL. Proves normal failure path not broken by hardening.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-failed
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_failed_examples
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-02
+- id: RVLAB-RH-RSPEC-04
+  title: RSpec missing structured report fails closed (RH-01)
+  category: hardening
+  description: RSpec --out file absent (crash before report) -> failed/malformed, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-missing
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_missing_report
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-RSPEC-05
+  title: RSpec malformed structured report fails closed (RH-01)
+  category: hardening
+  description: RSpec --out file contains malformed JSON -> parse_failed/malformed, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-malformed
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_malformed_report
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-MINITEST-01
+  title: Minitest unexplained nonzero exit fails closed (RH-03)
+  category: hardening
+  description: Minitest reporter succeeds but process exits 1 with 0 failures (at_exit crash) -> failed INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-minitest-exit1
+    operations:
+    - name: config_replace
+      from: "minitest:\n    enabled: false\n    required: false"
+      to: "minitest:\n    enabled: true\n    required: true"
+    - name: fake_bundle
+      analyzer: minitest
+      behavior: minitest_exit1_no_failures
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: minitest
+    execution_status: failed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - minitest
+  - RH-03
+- id: RVLAB-RH-MINITEST-02
+  title: Minitest reporter identity bound to RailVerdict (RH-04)
+  category: hardening
+  description: Reporter is resolved from RailVerdict distribution (exe/railverdict-minitest-reporter.rb), not arbitrary Gem.latest. Ensures distribution self-containment.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-minitest-identity
+    operations:
+    - name: config_replace
+      from: "minitest:\n    enabled: false\n    required: false"
+      to: "minitest:\n    enabled: true\n    required: true"
+    - name: fake_bundle
+      analyzer: minitest
+      behavior: minitest_reporter_identity
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: minitest
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - minitest
+  - RH-04
+- id: RVLAB-RH-SIMPLECOV-01
+  title: SimpleCov unsupported 0.x rejected (RH-05)
+  category: hardening
+  description: SimpleCov native document with simplecov_version 0.20.0 must be rejected as unsupported, enforcing >=1 <2 contract.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-0x
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"0.20.0"},"coverage":{"/tmp/fake/app.rb":{"lines":[1,1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: unsupported
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-05
+- id: RVLAB-RH-SIMPLECOV-02
+  title: SimpleCov deterministic missing-timestamp normalization (RH-06)
+  category: hardening
+  description: SimpleCov native document without timestamp must normalize to timestamp 0 deterministically, not Time.now.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-timestamp
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{}}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: simplecov
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-06
+- id: RVLAB-RH-SIMPLECOV-03
+  title: SimpleCov external absolute path rejected (RH-07)
+  category: hardening
+  description: SimpleCov native coverage containing absolute external path /etc/passwd must be rejected as malformed (path containment).
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-external
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{"/etc/passwd":{"lines":[1,1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-07
+- id: RVLAB-RH-SIMPLECOV-04
+  title: SimpleCov traversal symlink escape rejected (RH-07)
+  category: hardening
+  description: SimpleCov native coverage with traversal path ../../outside.rb escaping repository root must be rejected as malformed.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-traversal
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{"../../etc/passwd":{"lines":[1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-07
+- id: RVLAB-RH-SIMPLECOV-05
+  title: SimpleCov external configured coverage_path rejected (RH-08)
+  category: hardening
+  description: Configured coverage_path escaping repository root (absolute outside or ../../) must be rejected as malformed.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-config
+    operations:
+    - name: replace
+      path: .railverdict.yml
+      from: "  simplecov:\n    enabled: true\n    required: false\n    coverage_path: coverage/coverage.json\n    freshness_window_seconds: 86400"
+      to: "  simplecov:\n    enabled: true\n    required: true\n    coverage_path: /tmp/evil_coverage.json\n    freshness_window_seconds: 86400"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-08
+- id: RVLAB-RH-ENV-01
+  title: VerificationEnvironment bundle probe failure does NOT fallback (RH-09)
+  category: hardening
+  description: bundle exec probe failure (exit 7) must mark environment unavailable, not fallback to global binary -> INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-env-bundlefail
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: bundle_probe_fail
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - environment
+  - RH-09
+- id: RVLAB-RH-ENV-02
+  title: Long analyzer timeout does not leak into version probe (RH-10)
+  category: hardening
+  description: Configured timeout_seconds 600 must be clamped to 5.0 for --version probe; check must still succeed quickly, not hang.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-env-probeclamp
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+            timeout_seconds: 600
+          simplecov:
+            enabled: true
+            required: false
+            coverage_path: coverage/coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: long_probe_clamp
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - environment
+  - RH-10

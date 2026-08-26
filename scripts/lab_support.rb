@@ -52,14 +52,14 @@ module LabSupport
 
   def fixture_env(env, cwd)
     env = env.dup
+    # Do not set BUNDLE_GEMFILE for railverdict candidate runs; it causes Gem.use_gemdeps wrapper to fail
+    # when rail_verdict is not in the fixture's Gemfile. Bundler will still find Gemfile via cwd.
+    # Only set BUNDLE_PATH config if needed without BUNDLE_GEMFILE.
     gemfile = File.join(cwd, "Gemfile")
-    if File.file?(gemfile)
-      env["BUNDLE_GEMFILE"] = gemfile
-      if env["BUNDLE_PATH"] && !env["BUNDLE_PATH"].empty?
-        bundle_config = File.join(cwd, ".bundle", "config")
-        FileUtils.mkdir_p(File.dirname(bundle_config))
-        File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
-      end
+    if File.file?(gemfile) && env["BUNDLE_PATH"] && !env["BUNDLE_PATH"].empty?
+      bundle_config = File.join(cwd, ".bundle", "config")
+      FileUtils.mkdir_p(File.dirname(bundle_config))
+      File.write(bundle_config, "---\nBUNDLE_PATH: #{env["BUNDLE_PATH"].inspect}\n")
     end
     env
   end
@@ -200,6 +200,17 @@ module LabSupport
         write_file(work_dir, ".railverdict.yml", operation.fetch("config"))
         write_file(work_dir, ".rubocop.yml", operation.fetch("rubocop_config", "AllCops:\n  TargetRubyVersion: 3.4\n"))
         write_file(work_dir, operation.fetch("path", "app.rb"), operation.fetch("content", "x = 1\n"))
+      when "write_json"
+        write_file(work_dir, operation.fetch("path"), JSON.pretty_generate(operation.fetch("content")))
+      when "write_raw"
+        write_file(work_dir, operation.fetch("path"), operation.fetch("content"))
+      when "symlink"
+        target = File.join(work_dir, operation.fetch("target"))
+        link = File.join(work_dir, operation.fetch("path"))
+        FileUtils.mkdir_p(File.dirname(link))
+        FileUtils.ln_sf(target, link)
+      when "ensure_coverage_dir"
+        FileUtils.mkdir_p(File.join(work_dir, "coverage"))
       else
         raise "unknown scenario operation: #{name}"
       end
@@ -212,9 +223,23 @@ module LabSupport
     FileUtils.mkdir_p(bin_dir)
     real_bundle = Gem.bin_path("bundler", "bundle")
     behavior = operation.fetch("behavior")
+    analyzer = operation.fetch("analyzer", "rubocop")
+    # Support multiple analyzers via comma-separated list or "all"
+    grep_pattern = if analyzer == "all"
+      ""
+    else
+      analyzer.split(",").map(&:strip).join("|")
+    end
+    condition = if grep_pattern.empty?
+      "true"
+    elsif analyzer.include?(",")
+      "printf '%s\n' \"$*\" | grep -Eq -- '#{grep_pattern}'"
+    else
+      "printf '%s\n' \"$*\" | grep -q -- '#{analyzer}'"
+    end
     script = <<~SH
       #!/bin/sh
-      if printf '%s\n' "$*" | grep -q -- '#{operation.fetch("analyzer", "rubocop")}' ; then
+      if #{condition} ; then
         #{fake_behavior(behavior)}
       fi
       exec #{Shellwords.escape(real_bundle)} "$@"
@@ -237,6 +262,24 @@ module LabSupport
       "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nsleep 3; printf '%s' '{}'; exit 0"
     when "wait_gate"
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nmkdir -p tmp\nprintf '1' > tmp/race.ready\nuntil [ -f tmp/race.go ]; do sleep 0.02; done\nprintf '%s' '{}'\nexit 0"
+    when "rspec_noisy_stdout"
+      "case \"\$*\" in *--version*) echo '3.13.6'; exit 0;; esac\n# noisy stdout test: --out file should contain valid JSON, stdout is polluted\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"--out\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"version\":\"3.13.6\",\"summary\":{\"duration\":0.1,\"example_count\":1,\"failure_count\":0,\"pending_count\":0,\"errors\":0},\"examples\":[{\"description\":\"noisy passes\",\"full_description\":\"noisy passes\",\"status\":\"passed\",\"file_path\":\"./spec/models/product_spec.rb\",\"line_number\":5}]}' > \"$OUT\"; fi\nprintf '%s\\n' '[AUDIT][2026-08-26] Starting test suite'; printf '%s\\n' 'puts pollution from application initializer'; printf '%s\\n' 'JSON Coverage report generated'; exit 0"
+    when "rspec_exit1_no_failures"
+      "case \"\$*\" in *--version*) echo '3.13.6'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"--out\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"version\":\"3.13.6\",\"summary\":{\"duration\":0.1,\"example_count\":2,\"failure_count\":0,\"pending_count\":0,\"errors\":0},\"examples\":[{\"description\":\"t1\",\"status\":\"passed\",\"file_path\":\"./spec/sample_spec.rb\",\"line_number\":5},{\"description\":\"t2\",\"status\":\"passed\",\"file_path\":\"./spec/sample_spec.rb\",\"line_number\":10}]}' > \"$OUT\"; fi\nprintf '%s\\n' 'Failure after suite execution in after(:suite) hook' >&2; exit 1"
+    when "rspec_failed_examples"
+      "case \"\$*\" in *--version*) echo '3.13.6'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"--out\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"version\":\"3.13.6\",\"summary\":{\"duration\":0.1,\"example_count\":1,\"failure_count\":1,\"pending_count\":0,\"errors\":0},\"examples\":[{\"description\":\"failing example\",\"full_description\":\"failing example\",\"status\":\"failed\",\"file_path\":\"./spec/models/product_spec.rb\",\"line_number\":12,\"exception\":{\"message\":\"expected true to be false\",\"backtrace\":[\"spec/models/product_spec.rb:12:in `block (2 levels)\" ]}}]}' > \"$OUT\"; fi\nexit 1"
+    when "rspec_missing_report"
+      "case \"\$*\" in *--version*) echo '3.13.6'; exit 0;; esac\n# intentionally do NOT create --out file\nprintf '%s\\n' 'RSpec did not produce output' >&2; exit 1"
+    when "rspec_malformed_report"
+      "case \"\$*\" in *--version*) echo '3.13.6'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"--out\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{not-json[' > \"$OUT\"; fi\nexit 0"
+    when "minitest_exit1_no_failures"
+      "case \"\$*\" in *--version*) echo '5.20.0'; exit 0;; esac\n# Also handle ruby -rminitest version probes\ncase \"\$*\" in *Minitest::VERSION*) echo '5.20.0'; exit 0;; esac\nif [ -n \"$RAILVERDICT_MINITEST_OUTPUT\" ]; then mkdir -p \"$(dirname \"$RAILVERDICT_MINITEST_OUTPUT\")\"; printf '%s' '{\"schema_version\":\"1.0\",\"runner\":\"minitest 5.20.0\",\"seed\":1234,\"tests_total\":1,\"assertions\":1,\"failures\":0,\"errors\":0,\"skips\":0,\"duration_seconds\":0.05,\"tests\":[{\"class_name\":\"SampleTest\",\"method_name\":\"test_pass\",\"status\":\"passed\",\"file\":\"test/sample_test.rb\",\"line\":5}]}' > \"$RAILVERDICT_MINITEST_OUTPUT\"; fi\nexit 1"
+    when "minitest_reporter_identity"
+      "case \"\$*\" in *--version*) echo '5.20.0'; exit 0;; esac\ncase \"\$*\" in *Minitest::VERSION*) echo '5.20.0'; exit 0;; esac\nif [ -n \"$RAILVERDICT_MINITEST_OUTPUT\" ]; then mkdir -p \"$(dirname \"$RAILVERDICT_MINITEST_OUTPUT\")\"; printf '%s' '{\"schema_version\":\"1.0\",\"runner\":\"minitest 5.20.0\",\"seed\":1,\"tests_total\":1,\"assertions\":1,\"failures\":0,\"errors\":0,\"skips\":0,\"duration_seconds\":0.01,\"tests\":[{\"class_name\":\"IdentityTest\",\"method_name\":\"test_bound\",\"status\":\"passed\",\"file\":\"test/sample_test.rb\",\"line\":5}]}' > \"$RAILVERDICT_MINITEST_OUTPUT\"; fi\nexit 0"
+    when "bundle_probe_fail"
+      "case \"\$*\" in *--version*) exit 7;; esac\ncase \"\$*\" in *Minitest::VERSION*) exit 7;; esac\nexit 7"
+    when "long_probe_clamp"
+      "case \"\$*\" in *--version*) sleep 0.1; echo '3.13.6'; exit 0;; esac\ncase \"\$*\" in *Minitest::VERSION*) sleep 0.1; echo '5.20.0'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"--out\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"version\":\"3.13.6\",\"summary\":{\"duration\":0.01,\"example_count\":1,\"failure_count\":0,\"pending_count\":0,\"errors\":0},\"examples\":[{\"description\":\"probe clamp test\",\"status\":\"passed\",\"file_path\":\"./spec/sample_spec.rb\",\"line_number\":1}]}' > \"$OUT\"; fi\nif [ -n \"$RAILVERDICT_MINITEST_OUTPUT\" ]; then mkdir -p \"$(dirname \"$RAILVERDICT_MINITEST_OUTPUT\")\"; printf '%s' '{\"schema_version\":\"1.0\",\"runner\":\"minitest 5.20.0\",\"seed\":1,\"tests_total\":1,\"assertions\":1,\"failures\":0,\"errors\":0,\"skips\":0,\"duration_seconds\":0.01,\"tests\":[]}' > \"$RAILVERDICT_MINITEST_OUTPUT\"; fi\nexit 0"
     when "adversarial_rubocop"
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{\"files\":[{\"path\":\"app/models/order.rb\",\"offenses\":[{\"cop_name\":\"Layout/TrailingWhitespace\",\"severity\":\"convention\",\"message\":\"\",\"location\":{\"start_line\":1,\"last_line\":1}},{\"cop_name\":\"Style/StringLiterals\",\"severity\":\"warning\",\"message\":\"\\u001b[31mColor\\u001b[0m with \\u0000 null and \\u0007 bell\",\"location\":{\"start_line\":2,\"last_line\":2}},{\"cop_name\":\"Naming/MethodName\",\"severity\":\"convention\",\"message\":\"'$(head -c 8000 /dev/zero | tr '\\0' 'A')'\",\"location\":{\"start_line\":3,\"last_line\":3}},{\"cop_name\":\"Metrics/ClassLength\",\"severity\":\"refactor\",\"message\":\"Broken: \\ufffd\\ufffd\\ufffd\",\"location\":{\"start_line\":4,\"last_line\":4}}]}]}'; exit 1"
     when "oversized_rspec"

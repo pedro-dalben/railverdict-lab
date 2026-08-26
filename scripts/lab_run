@@ -60,6 +60,28 @@ def resolve_candidate(root, candidate_doc, options)
     gem_home = File.join(temp_root, "gem-home")
     _stdout, stderr, status = LabSupport.run(["gem", "install", gem_path, "--install-dir", gem_home, "--no-document"], cwd: temp_root)
     raise "candidate gem install failed: #{stderr}" unless status.success?
+    # Patch wrapper to bypass Bundler's Gem setup which fails when rail_verdict not in fixture Gemfile
+    begin
+      wrapper = File.join(gem_home, "bin", "railverdict")
+      gem_exe = Dir[File.join(gem_home, "gems", "rail_verdict-*", "exe", "railverdict")].first
+      gem_lib = Dir[File.join(gem_home, "gems", "rail_verdict-*", "lib")].first
+      if File.file?(wrapper) && gem_exe && gem_lib
+        # Ensure dependencies are on load path without relying on GEM_PATH/bundler
+        patched = <<~WRAPPER
+          #!/usr/bin/env ruby
+          # Bypass bundler - manually setup load path for isolated gem_home
+          gem_home = #{gem_home.inspect}
+          Dir[File.join(gem_home, "gems", "*/lib")].each do |lib|
+            $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+          end
+          load #{gem_exe.inspect}
+        WRAPPER
+        File.write(wrapper, patched)
+        File.chmod(0755, wrapper)
+      end
+    rescue StandardError
+      nil
+    end
     env = { "GEM_HOME" => gem_home, "GEM_PATH" => "#{gem_home}:#{ENV.fetch("GEM_PATH", "")}", "PATH" => "#{File.join(gem_home, "bin")}:#{ENV.fetch("PATH")}" }
     bundle_path = ENV["BUNDLE_PATH"]
     if (bundle_path.nil? || bundle_path.empty?) && File.file?(File.join(root, ".bundle", "config"))
