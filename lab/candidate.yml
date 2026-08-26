@@ -5,10 +5,10 @@ candidate:
   gem_name: rail_verdict
   gem_version: 1.4.0
   repository: https://github.com/pedro-dalben/RailVerdict.git
-  source_sha: 525611a08a64da799b6228a65b98a75ae3b5c211
+  source_sha: afd8cd45746de3a2eb2a245a0f6bdc6592aa8938
   tag: v1.4.0
-  gem_sha256: 8f97a924290e2950494ca2490798ae07d00ac6687c4446ba3d27fda91a548e36
-  frozen_at: '2026-08-25T19:00:00Z'
+  gem_sha256: 9a84eb95eefc3e4bf26a70e130852df2061a3d39a978cdbea2d1f40126f3b92b
+  frozen_at: '2026-08-26T04:25:00Z'
   scenario_catalog_version: '4.0'
 environment:
   ruby_version: 3.4.5
