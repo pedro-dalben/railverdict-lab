@@ -1,6 +1,6 @@
 schema_version: '2.0'
-catalog_version: '4.0'
-description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED).
+catalog_version: '4.1'
+description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED) + RH-01..RH-10 hardening (132 scenarios).
 check_changed: &id001
   interface: cli
   args:
@@ -3075,3 +3075,537 @@ scenarios:
   cleanup: remove_worktree
   tags:
   - receipt
+- id: RVLAB-RH-RSPEC-01
+  title: RSpec noisy stdout isolation (RH-01)
+  category: hardening
+  description: RSpec structured JSON is transported via --out tempfile; noisy [AUDIT]/puts stdout must not pollute parsing. Simulates application stdout pollution that previously caused parse_failed -> INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-noisy
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_noisy_stdout
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-RSPEC-02
+  title: RSpec unexplained nonzero exit fails closed (RH-02)
+  category: hardening
+  description: RSpec exits 1 with 0 failed examples (after(:suite) crash, syntax error). Must reconcile exit code -> failed INCOMPLETE, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-exit1
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_exit1_no_failures
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: rspec
+    execution_status: failed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-02
+- id: RVLAB-RH-RSPEC-03
+  title: RSpec normal failed examples produce findings (RH-02 positive)
+  category: hardening
+  description: RSpec exits 1 with failed examples -> succeeded analyzer with introduced findings, gate FAIL. Proves normal failure path not broken by hardening.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-failed
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_failed_examples
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-02
+- id: RVLAB-RH-RSPEC-04
+  title: RSpec missing structured report fails closed (RH-01)
+  category: hardening
+  description: RSpec --out file absent (crash before report) -> failed/malformed, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-missing
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_missing_report
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-RSPEC-05
+  title: RSpec malformed structured report fails closed (RH-01)
+  category: hardening
+  description: RSpec --out file contains malformed JSON -> parse_failed/malformed, not False PASS.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-rspec-malformed
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: rspec_malformed_report
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - rspec
+  - RH-01
+- id: RVLAB-RH-MINITEST-01
+  title: Minitest unexplained nonzero exit fails closed (RH-03)
+  category: hardening
+  description: Minitest reporter succeeds but process exits 1 with 0 failures (at_exit crash) -> failed INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-minitest-exit1
+    operations:
+    - name: config_replace
+      from: "minitest:\n    enabled: false\n    required: false"
+      to: "minitest:\n    enabled: true\n    required: true"
+    - name: fake_bundle
+      analyzer: minitest
+      behavior: minitest_exit1_no_failures
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: minitest
+    execution_status: failed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - minitest
+  - RH-03
+- id: RVLAB-RH-MINITEST-02
+  title: Minitest reporter identity bound to RailVerdict (RH-04)
+  category: hardening
+  description: Reporter is resolved from RailVerdict distribution (exe/railverdict-minitest-reporter.rb), not arbitrary Gem.latest. Ensures distribution self-containment.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-minitest-identity
+    operations:
+    - name: config_replace
+      from: "minitest:\n    enabled: false\n    required: false"
+      to: "minitest:\n    enabled: true\n    required: true"
+    - name: fake_bundle
+      analyzer: minitest
+      behavior: minitest_reporter_identity
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: minitest
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - minitest
+  - RH-04
+- id: RVLAB-RH-SIMPLECOV-01
+  title: SimpleCov unsupported 0.x rejected (RH-05)
+  category: hardening
+  description: SimpleCov native document with simplecov_version 0.20.0 must be rejected as unsupported, enforcing >=1 <2 contract.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-0x
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"0.20.0"},"coverage":{"/tmp/fake/app.rb":{"lines":[1,1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: unsupported
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-05
+- id: RVLAB-RH-SIMPLECOV-02
+  title: SimpleCov deterministic missing-timestamp normalization (RH-06)
+  category: hardening
+  description: SimpleCov native document without timestamp must normalize to timestamp 0 deterministically, not Time.now.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-timestamp
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{}}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: simplecov
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-06
+- id: RVLAB-RH-SIMPLECOV-03
+  title: SimpleCov external absolute path rejected (RH-07)
+  category: hardening
+  description: SimpleCov native coverage containing absolute external path /etc/passwd must be rejected as malformed (path containment).
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-external
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{"/etc/passwd":{"lines":[1,1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-07
+- id: RVLAB-RH-SIMPLECOV-04
+  title: SimpleCov traversal symlink escape rejected (RH-07)
+  category: hardening
+  description: SimpleCov native coverage with traversal path ../../outside.rb escaping repository root must be rejected as malformed.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-traversal
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.3
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          simplecov:
+            enabled: true
+            required: true
+            coverage_path: tmp/rv-coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: ensure_coverage_dir
+    - name: write_raw
+      path: tmp/rv-coverage.json
+      content: '{"meta":{"simplecov_version":"1.0.0"},"coverage":{"../../etc/passwd":{"lines":[1]}},"timestamp":1700000000}'
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-07
+- id: RVLAB-RH-SIMPLECOV-05
+  title: SimpleCov external configured coverage_path rejected (RH-08)
+  category: hardening
+  description: Configured coverage_path escaping repository root (absolute outside or ../../) must be rejected as malformed.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-simplecov-config
+    operations:
+    - name: replace
+      path: .railverdict.yml
+      from: "  simplecov:\n    enabled: true\n    required: false\n    coverage_path: coverage/coverage.json\n    freshness_window_seconds: 86400"
+      to: "  simplecov:\n    enabled: true\n    required: true\n    coverage_path: /tmp/evil_coverage.json\n    freshness_window_seconds: 86400"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    analyzer: simplecov
+    execution_status: malformed
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - simplecov
+  - RH-08
+- id: RVLAB-RH-ENV-01
+  title: VerificationEnvironment bundle probe failure does NOT fallback (RH-09)
+  category: hardening
+  description: bundle exec probe failure (exit 7) must mark environment unavailable, not fallback to global binary -> INCOMPLETE.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-env-bundlefail
+    operations:
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: bundle_probe_fail
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - environment
+  - RH-09
+- id: RVLAB-RH-ENV-02
+  title: Long analyzer timeout does not leak into version probe (RH-10)
+  category: hardening
+  description: Configured timeout_seconds 600 must be clamped to 5.0 for --version probe; check must still succeed quickly, not hang.
+  setup:
+    strategy: clone
+    branch: rvlab-rh-env-probeclamp
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          minitest:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+            timeout_seconds: 600
+          simplecov:
+            enabled: true
+            required: false
+            coverage_path: coverage/coverage.json
+            freshness_window_seconds: 86400
+          bundler_audit:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: fake_bundle
+      analyzer: rspec
+      behavior: long_probe_clamp
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - hardening
+  - environment
+  - RH-10
