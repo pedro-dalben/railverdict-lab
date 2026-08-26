@@ -5,9 +5,9 @@ candidate:
   gem_name: rail_verdict
   gem_version: 1.4.0
   repository: https://github.com/pedro-dalben/RailVerdict.git
-  source_sha: a0a5ca38239f29450d32610f741be70130dca561
+  source_sha: 87a9e364232d914afdbdd125875aaff0ee15bc9e
   tag: v1.4.0
-  gem_sha256: 9a84eb95eefc3e4bf26a70e130852df2061a3d39a978cdbea2d1f40126f3b92b
+  gem_sha256: 479526cad2f8ccf84dcf593a987b93e5387d3f7ef69859f9f63dc638e4e16dca
   frozen_at: '2026-08-26T14:34:27Z'
   scenario_catalog_version: '4.1'
 environment:

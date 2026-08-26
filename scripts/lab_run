@@ -366,7 +366,7 @@ def mcp_handoff(candidate, work_dir, mode, env = {})
       decision = verified["decision"]
       cli_path = File.join(Dir.tmpdir, "rv-lab-ho-#{Process.pid}.json")
       File.write(cli_path, JSON.generate(handoff))
-      cli_out, _cli_stderr, = LabSupport.product_run(candidate, ["check", "--handoff", cli_path, "--format", "json"], cwd: work_dir, extra_env: env)
+      cli_out, _cli_stderr, = LabSupport.product_run(candidate, ["handoff", "verify", cli_path, "--format", "json"], cwd: work_dir, extra_env: env)
       cli_json = LabSupport.json(cli_out)
       cli_decision = cli_json["decision"] || cli_json.dig("handoff_reuse", "decision") || cli_json.dig("handoff", "decision")
       pass = %w[REUSABLE VERIFICATION_REQUIRED INVALID UNAVAILABLE].include?(decision) && decision == cli_decision
