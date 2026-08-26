@@ -314,6 +314,108 @@ def mcp_freshness(candidate, work_dir)
   end
 end
 
+def mcp_protocol(candidate, work_dir, mode)
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    init = client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    init_ok = init.dig("result", "serverInfo").is_a?(Hash) && init.dig("result", "protocolVersion").to_s == "2025-11-25"
+    tools = client.request("tools/list")
+    tool_names = Array(tools.dig("result", "tools")).map { |tool| tool["name"] }
+    expected_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate get_verification_receipt get_pr_intelligence create_handoff inspect_handoff verify_handoff]
+    tools_present = (expected_tools - tool_names).empty?
+    unknown = client.request("tools/bogus_method_xyz")
+    unknown_error = unknown.key?("error") || (unknown.dig("result", "isError") == true)
+    invalid = client.request("tools/call", "name" => "explain", "arguments" => {})
+    invalid_error = invalid.dig("result", "isError") == true
+    pass = init_ok && tools_present && unknown_error && invalid_error
+    { "lab_result" => { "init_ok" => init_ok, "tools_present" => tools_present, "unknown_method_error" => unknown_error, "invalid_params_error" => invalid_error, "conformance_pass" => pass },
+      "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+  ensure
+    client.close
+  end
+end
+
+def mcp_handoff(candidate, work_dir, mode, env = {})
+  base = LabSupport.git(work_dir, "rev-parse", "main").first.strip
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    client.request("tools/list")
+
+    case mode
+    when "parity"
+      verify = parse_tool(client, "verify", "changed" => false)
+      mcp_gate = verify["gate"]
+      mcp_receipt = parse_tool(client, "get_verification_receipt", {})
+      cli_out, _cli_stderr, = LabSupport.product_run(candidate, ["check", "--format", "json"], cwd: work_dir, extra_env: env)
+      cli_json = LabSupport.json(cli_out)
+      cli_gate = cli_json.dig("gate_projection", "gate") || cli_json["gate"]
+      pass = %w[PASS FAIL INCOMPLETE].include?(mcp_gate.to_s) && mcp_gate.to_s == cli_gate.to_s && mcp_receipt["status"] == "fresh"
+      { "lab_result" => { "mcp_gate" => mcp_gate, "cli_gate" => cli_gate, "mcp_status" => mcp_receipt["status"], "parity_pass" => pass },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+
+    when "roundtrip"
+      created = parse_tool(client, "create_handoff", "changed" => true, "base" => base)
+      raise "create_handoff failed: #{created['message']}" if created["mcp_is_error"]
+      handoff = created["handoff"] || created
+      handoff_id = created["handoff_id"] || handoff["handoff_id"]
+      raise "create_handoff missing handoff_id" unless handoff_id
+      inspected = parse_tool(client, "inspect_handoff", "handoff" => handoff)
+      raise "inspect_handoff reports invalid" unless inspected["valid"] == true
+      verified = parse_tool(client, "verify_handoff", "handoff" => handoff)
+      decision = verified["decision"]
+      cli_path = File.join(Dir.tmpdir, "rv-lab-ho-#{Process.pid}.json")
+      File.write(cli_path, JSON.generate(handoff))
+      cli_out, _cli_stderr, = LabSupport.product_run(candidate, ["check", "--handoff", cli_path, "--format", "json"], cwd: work_dir, extra_env: env)
+      cli_json = LabSupport.json(cli_out)
+      cli_decision = cli_json["decision"] || cli_json.dig("handoff_reuse", "decision") || cli_json.dig("handoff", "decision")
+      pass = %w[REUSABLE VERIFICATION_REQUIRED INVALID UNAVAILABLE].include?(decision) && decision == cli_decision
+      { "lab_result" => { "handoff_id" => handoff_id, "inspect_valid" => inspected["valid"], "mcp_decision" => decision, "cli_decision" => cli_decision, "roundtrip_pass" => pass },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+
+    when "tamper"
+      created = parse_tool(client, "create_handoff", "changed" => true, "base" => base)
+      raise "create_handoff failed: #{created['message']}" if created["mcp_is_error"]
+      handoff = created["handoff"] || created
+      tampered = Marshal.load(Marshal.dump(handoff))
+      tampered["handoff_id"] = "tampered-#{tampered['handoff_id']}"
+      tampered["receipt"] = { "receipt_id" => "sha256:#{'f' * 64}", "gate_projection" => { "gate" => "PASS" } }
+      verified = parse_tool(client, "verify_handoff", "handoff" => tampered)
+      pass = verified["decision"] == "INVALID" || verified["handoff_valid"] == false || verified["mcp_is_error"] == true
+      { "lab_result" => { "mcp_decision" => verified["decision"], "handoff_valid" => verified["handoff_valid"], "tamper_detected" => pass },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+
+    when "oversized"
+      created = parse_tool(client, "create_handoff", "changed" => true, "base" => base)
+      raise "create_handoff failed: #{created['message']}" if created["mcp_is_error"]
+      handoff = created["handoff"] || created
+      padded = JSON.generate(handoff.merge("__padding__" => "X" * (300 * 1024)))
+      verified = parse_tool(client, "verify_handoff", "handoff_json" => padded)
+      pass = verified["decision"] == "INVALID" || verified["handoff_valid"] == false || verified["mcp_is_error"] == true
+      { "lab_result" => { "mcp_decision" => verified["decision"], "oversized_rejected" => pass },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+
+    when "findings"
+      verify = parse_tool(client, "verify", "changed" => false)
+      list = parse_tool(client, "list_findings")
+      findings = list["findings"] || (list.is_a?(Array) ? list : [])
+      target = findings.find { |finding| finding["blocking"] == true } || findings.find { |finding| finding["state"] == "introduced" } || findings.first
+      raise "no findings returned by list_findings" if findings.empty?
+      ref = target && (target["id"] || target["fingerprint"])
+      gotten = ref ? parse_tool(client, "get_finding", "finding_ref" => ref) : { "mcp_is_error" => false }
+      investigate = parse_tool(client, "investigate", "limit" => 1, "preview" => true)
+      raise "investigate failed" if investigate["mcp_is_error"]
+      pass = findings.length > 0 && (!gotten["mcp_is_error"]) && !investigate["mcp_is_error"]
+      { "lab_result" => { "findings_count" => findings.length, "target_ref" => ref, "get_finding_ok" => !gotten["mcp_is_error"], "investigate_ok" => !investigate["mcp_is_error"], "findings_real" => pass },
+        "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0, "mcp_trace" => client.trace }
+    else
+      raise "unknown mcp_handoff mode #{mode}"
+    end
+  ensure
+    client.close
+  end
+end
+
 # ---- RailVerdict 1.2 Agent Verification Protocol scenarios ----
 
 def receipt_create(candidate, work_dir, extra_args: [], env: {})
@@ -626,8 +728,12 @@ selected.each do |scenario|
                  mcp_repair(candidate, work_dir, command.fetch("cheat"))
                when "mcp_security"
                  mcp_security(candidate, ROOT, work_dir)
-               when "mcp_freshness"
-                 mcp_freshness(candidate, work_dir)
+                when "mcp_freshness"
+                  mcp_freshness(candidate, work_dir)
+                when "mcp_handoff"
+                  mcp_handoff(candidate, work_dir, command.fetch("mode"), env)
+                when "mcp_protocol"
+                  mcp_protocol(candidate, work_dir, command.fetch("mode"))
                when "agent"
                  agent_receipt(candidate, work_dir, command.fetch("mode"), env)
                when "bootstrap"

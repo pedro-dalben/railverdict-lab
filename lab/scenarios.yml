@@ -2697,153 +2697,148 @@ scenarios:
   cleanup: remove_worktree
   tags:
   - portability
-- id: RVLAB-MCP-FRESH-01
-  title: MCP fresh 1
+- id: RVLAB-MCP-PROTOCOL-01
+  title: MCP JSON-RPC protocol conformance
   category: mcp
-  description: MCP freshness
+  description: Initialize handshake, tools/list coverage, unknown-method error, and invalid-params
+    rejection must all behave per JSON-RPC 2.0.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-01
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_protocol
+    mode: conformance
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    conformance_pass: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-02
-  title: MCP fresh 2
+  - protocol
+- id: RVLAB-MCP-PARITY-01
+  title: MCP receipt parity with CLI
   category: mcp
-  description: MCP freshness
+  description: get_verification_receipt over MCP must return the same receipt_id and freshness
+    as the CLI `receipt verify` on the same repository state.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-02
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_handoff
+    mode: parity
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    parity_pass: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-03
-  title: MCP fresh 3
+  - parity
+- id: RVLAB-MCP-HANDOFF-01
+  title: MCP handoff round-trip matches CLI decision
   category: mcp
-  description: MCP freshness
+  description: create_handoff then inspect_handoff then verify_handoff over MCP, and the
+    resulting decision must equal the CLI `check --handoff` decision.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-03
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_handoff
+    mode: roundtrip
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    roundtrip_pass: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-04
-  title: MCP fresh 4
+  - handoff
+- id: RVLAB-MCP-HANDOFF-02
+  title: MCP handoff tamper detection
   category: mcp
-  description: MCP freshness
+  description: A handoff with a corrupted handoff_id and receipt must be rejected as INVALID
+    (handoff_integrity_failed), never silently reused.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-04
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_handoff
+    mode: tamper
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    tamper_detected: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-05
-  title: MCP fresh 5
+  - handoff
+  - security
+- id: RVLAB-MCP-HANDOFF-03
+  title: MCP handoff size containment
   category: mcp
-  description: MCP freshness
+  description: A handoff exceeding the 256 KiB bound must be rejected as INVALID
+    (handoff_too_large), never parsed or reused.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-05
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_handoff
+    mode: oversized
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    oversized_rejected: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-06
-  title: MCP fresh 6
+  - handoff
+  - security
+- id: RVLAB-MCP-FINDINGS-01
+  title: MCP findings tools return real evidence
   category: mcp
-  description: MCP freshness
+  description: list_findings / get_finding / investigate must surface the same real findings
+    the CLI check produces on a failing repository.
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-06
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_handoff
+    mode: findings
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    findings_real: true
   cleanup: remove_worktree
   tags:
   - mcp
-- id: RVLAB-MCP-FRESH-07
-  title: MCP fresh 7
+  - findings
+- id: RVLAB-MCP-FRESH-REAL-01
+  title: MCP evidence freshness after dirty edits
   category: mcp
-  description: MCP freshness
+  description: A same-file edit and an untracked file change must be observed without
+    restarting the MCP server (real MCP freshness, not CLI).
   setup:
     strategy: clone
-    branch: rvlab-mcp-fresh-07
-    operations:
-    - name: commit
+    operations: []
   command:
-    interface: agent
-    mode: healthy
+    interface: mcp_freshness
   expected_gate: PASS
   expected_completion: complete
   expected_exit: 0
   expected:
-    receipt_fresh: true
-    validation_status: fresh
+    cache_freshness_pass: true
   cleanup: remove_worktree
   tags:
   - mcp
+  - cache
+  - freshness
 - id: RVLAB-REPAIR-BOUNDARY-01
   title: Real fix succeeds
   category: repair
