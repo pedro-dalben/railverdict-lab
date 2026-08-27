@@ -252,6 +252,12 @@ module LabSupport
     case behavior
     when "missing"
       "exit 127"
+    when "brakeman_clean"
+      "case \"\$*\" in *--version*) echo 'brakeman 8.0.6'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"-o\" ] || [ \"$PREV\" = \"--output\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"scan_info\":{\"app_path\":\"/app\",\"rails_version\":\"8.0.1\",\"brakeman_version\":\"8.0.6\",\"ruby_version\":\"3.4.0\",\"security_warnings\":0,\"duration\":0.05,\"checks_performed\":[\"SQL\",\"SendFile\"]},\"warnings\":[],\"errors\":[],\"obsolete\":[]}' > \"$OUT\"; fi\nexit 0"
+    when "brakeman_warnings"
+      "case \"\$*\" in *--version*) echo 'brakeman 8.0.6'; exit 0;; esac\nOUT=\"\"; PREV=\"\"; for ARG in \"$@\"; do if [ \"$PREV\" = \"-o\" ] || [ \"$PREV\" = \"--output\" ]; then OUT=\"$ARG\"; fi; PREV=\"$ARG\"; done\nif [ -n \"$OUT\" ]; then mkdir -p \"$(dirname \"$OUT\")\"; printf '%s' '{\"scan_info\":{\"app_path\":\"/app\",\"rails_version\":\"8.0.1\",\"brakeman_version\":\"8.0.6\",\"ruby_version\":\"3.4.0\",\"security_warnings\":1,\"duration\":0.05,\"checks_performed\":[\"SQL\"]},\"warnings\":[{\"warning_type\":\"SQL Injection\",\"warning_code\":0,\"fingerprint\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"check_name\":\"SQL\",\"message\":\"Possible SQL injection\",\"file\":\"app/models/order.rb\",\"line\":42,\"confidence\":\"High\"}],\"errors\":[],\"obsolete\":[]}' > \"$OUT\"; fi\nexit 3"
+    when "brakeman_exit2"
+      "case \"\$*\" in *--version*) echo 'brakeman 8.0.6'; exit 0;; esac\nprintf '%s\\n' 'Fatal Brakeman crash' >&2; exit 2"
     when "unexpected_exit"
       "case \"\$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nprintf '%s' '{}'; exit 3"
     when "malformed_json"

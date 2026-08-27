@@ -3604,3 +3604,174 @@ scenarios:
   - hardening
   - environment
   - RH-10
+- id: RVLAB-15-BRAKEMAN-01
+  title: Brakeman clean scan succeeds in gate evaluation
+  category: security
+  description: Brakeman enabled and runs clean scan producing succeeded analyzer result.
+  setup:
+    strategy: clone
+    branch: lab/15-brakeman-clean
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          brakeman:
+            enabled: true
+            required: true
+          rspec:
+            enabled: false
+            required: false
+      base: main
+    - name: fake_bundle
+      analyzer: brakeman
+      behavior: brakeman_clean
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: brakeman
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - brakeman
+  - security
+  - acceptance
+- id: RVLAB-15-BRAKEMAN-02
+  title: Brakeman security warning detected and fails gate
+  category: security
+  description: Brakeman detects a high confidence SQL injection warning and fails strict gate.
+  setup:
+    strategy: clone
+    branch: lab/15-brakeman-warn
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: strict
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          brakeman:
+            enabled: true
+            required: true
+          rspec:
+            enabled: false
+            required: false
+      base: main
+    - name: fake_bundle
+      analyzer: brakeman
+      behavior: brakeman_warnings
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    analyzer: brakeman
+    analyzer_status: succeeded
+    introduced_min: 1
+  cleanup: remove_worktree
+  tags:
+  - brakeman
+  - security
+  - negative
+- id: RVLAB-15-TARGETED-01
+  title: Changed scope triggers targeted RSpec test selection
+  category: test_selection
+  description: Isolated change in order model with order spec resolves targeted test scope.
+  setup:
+    strategy: clone
+    branch: lab/15-targeted-rspec
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          rspec:
+            enabled: true
+            required: true
+      base: main
+    - name: replace
+      path: app/models/order.rb
+      from: '
+
+        end
+
+        '
+      to: "\n  def formatted_total\n    format('%.2f', total_amount)\n  end\nend\n"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+  command: *id001
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - targeted_rspec
+  - acceptance
+- id: RVLAB-15-TARGETED-02
+  title: Routes change triggers safe fallback to full test verification
+  category: test_selection
+  description: Touching config/routes.rb triggers shared infrastructure fallback.
+  setup:
+    strategy: clone
+    branch: lab/15-targeted-fallback
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.5
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+          rspec:
+            enabled: true
+            required: true
+      base: main
+    - name: append
+      path: config/routes.rb
+      content: "\n# comment\n"
+    - name: commit
+  command: *id001
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - targeted_rspec
+  - fallback
