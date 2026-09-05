@@ -3,12 +3,12 @@ catalog_version: '5.0'
 candidate:
   mode: published
   gem_name: rail_verdict
-  gem_version: 1.5.0
+  gem_version: 1.7.0
   repository: https://github.com/pedro-dalben/RailVerdict.git
   source_sha: HEAD
-  tag: v1.5.0
-  gem_sha256: 9b3c115245d1ba50ff0e30a5749f9b6e5724b8f527eb8b762b320f3a21ebb801
-  frozen_at: '2026-08-27T03:30:00Z'
+  tag: v1.7.0
+  gem_sha256: db3b50b6370b3ba95e0c0f2a6ca15e01ac83f8ed888f234c71349e3a750810d6
+  frozen_at: '2026-09-05T12:00:00Z'
   scenario_catalog_version: '5.0'
 environment:
   ruby_version: 3.4.5
@@ -28,6 +28,7 @@ capabilities:
   - init
   - doctor
   - check
+  - policy
   - pr
   - findings
   - baseline
@@ -49,6 +50,7 @@ capabilities:
   - investigate
   - get_verification_receipt
   - get_pr_intelligence
+  - get_engineering_policy
   - create_handoff
   - inspect_handoff
   - verify_handoff
@@ -63,3 +65,4 @@ capabilities:
   per_analyzer_reuse: true
   targeted_rspec: true
   brakeman: true
+  engineering_policy: true

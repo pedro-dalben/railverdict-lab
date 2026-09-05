@@ -111,6 +111,15 @@ def evaluate(scenario, actual, exit_code)
     checks << { "name" => "quality_delta_available", "expected" => expected["quality_delta_available"], "actual" => available, "matched" => available == expected["quality_delta_available"] }
   end
 
+  expected.each do |key, expectation|
+    next unless key.start_with?("requirement_")
+    requirement_id = key.sub(/\Arequirement_/, "")
+    requirements = Array(product["requirements"])
+    entry = requirements.find { |item| item["id"] == requirement_id }
+    actual_value = entry ? entry["status"] : "missing"
+    checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => actual_value == expectation }
+  end
+
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
   ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available]
   expected.each do |key, expectation|

@@ -3775,3 +3775,1074 @@ scenarios:
   tags:
   - targeted_rspec
   - fallback
+- id: RVLAB-CI-01
+  title: Change Intelligence authorization surface
+  category: change_intelligence
+  description: A new Pundit policy must surface as 1.1 change intelligence with gate PASS preserved.
+  setup:
+    strategy: clone
+    branch: lab/ci-01-authorization
+    operations:
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def show?\n    true\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-02
+  title: Change Intelligence migration signal
+  category: change_intelligence
+  description: A new migration must be detected with safe full-scope fallback and unchanged gate.
+  setup:
+    strategy: clone
+    branch: lab/ci-02-migration
+    operations:
+    - name: write
+      path: db/migrate/20260801000000_lab_ci_add_index.rb
+      content: "class LabCiAddIndex < ActiveRecord::Migration[8.0]\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-03
+  title: Change Intelligence dependency signal
+  category: change_intelligence
+  description: A Gemfile comment touch must flag the dependency surface without breaking the bundle.
+  setup:
+    strategy: clone
+    branch: lab/ci-03-dependency
+    operations:
+    - name: append
+      path: Gemfile
+      content: "\n# lab-ci dependency touch\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-04
+  title: Change Intelligence routes signal
+  category: change_intelligence
+  description: A routes touch must be detected while the quality gate stays PASS.
+  setup:
+    strategy: clone
+    branch: lab/ci-04-routes
+    operations:
+    - name: append
+      path: config/routes.rb
+      content: "\n# lab-ci routes touch\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-05
+  title: Change Intelligence multi-surface change
+  category: change_intelligence
+  description: Model plus routes plus migration change must keep gate PASS with 1.1 intelligence.
+  setup:
+    strategy: clone
+    branch: lab/ci-05-multi-surface
+    operations:
+    - name: append
+      path: app/models/customer.rb
+      content: "\n# lab-ci model touch\n"
+    - name: append
+      path: config/routes.rb
+      content: "\n# lab-ci routes touch\n"
+    - name: write
+      path: db/migrate/20260802000000_lab_ci_multi.rb
+      content: "class LabCiMulti < ActiveRecord::Migration[8.0]\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-06
+  title: Change Intelligence preserves failure gate
+  category: change_intelligence
+  description: Intelligence must never override a FAIL gate on a policy plus migration change.
+  setup:
+    strategy: clone
+    branch: lab/ci-06-fail-gate
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '
+
+        end
+
+        '
+      to: "\n  def ci_failure\n    unused_value = 1\n    total_amount\n  end\nend\n"
+    - name: write
+      path: db/migrate/20260803000000_lab_ci_fail.rb
+      content: "class LabCiFail < ActiveRecord::Migration[8.0]\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-07
+  title: Change Intelligence renamed model evidence
+  category: change_intelligence
+  description: A renamed model must keep both old and new paths in scope without gate impact.
+  setup:
+    strategy: clone
+    branch: lab/ci-07-rename
+    operations:
+    - name: rename
+      from: app/models/invoice.rb
+      to: app/models/billing_invoice.rb
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-08
+  title: Change Intelligence ambiguous generic service
+  category: change_intelligence
+  description: Authorization-like logic inside a generic service filename must not inflate the gate.
+  setup:
+    strategy: clone
+    branch: lab/ci-08-ambiguous
+    operations:
+    - name: write
+      path: app/services/order_access.rb
+      content: "class OrderAccess\n  def allowed?(user)\n    user.admin?\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-09
+  title: Change Intelligence project sensitive area
+  category: change_intelligence
+  description: A 1.6 review.sensitive_paths config must load and keep the gate PASS.
+  setup:
+    strategy: clone
+    branch: lab/ci-09-project-area
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.6
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        review:
+          sensitive_paths:
+            financial:
+              - "app/models/invoice.rb"
+      base: main
+    - name: append
+      path: app/models/invoice.rb
+      content: "\n# lab-ci financial touch\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-CI-10
+  title: Change Intelligence initializer configuration surface
+  category: change_intelligence
+  description: A new initializer must flag configuration surfaces without gate impact.
+  setup:
+    strategy: clone
+    branch: lab/ci-10-initializer
+    operations:
+    - name: write
+      path: config/initializers/lab_ci.rb
+      content: "Rails.application.config.x.lab_ci = true\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  capability: pr_intelligence
+  skip_if_unsupported: true
+  expected:
+    schema_version: '1.1'
+  cleanup: remove_worktree
+  tags:
+  - pr
+  - change-intelligence
+  - capability-gated
+- id: RVLAB-POL-01
+  title: Policy authorization change requires RSpec and Brakeman
+  category: engineering_policy
+  description: An authorization surface change with RSpec executed and Brakeman clean satisfies both analyzer requirements and the decision mirrors the gate.
+  setup:
+    strategy: clone
+    branch: lab/pol-01-authorization
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+          brakeman:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          changes:
+            authorization:
+              require_analyzers: [rspec, brakeman]
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def show?\n    true\n  end\nend\n"
+    - name: fake_bundle
+      analyzer: brakeman
+      behavior: brakeman_clean
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-analyzer-rspec-for-authorization: satisfied
+    requirement_req-analyzer-brakeman-for-authorization: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-02
+  title: Policy targeted execution against FULL requirement stays INCOMPLETE
+  category: engineering_policy
+  description: A model change executes RSpec targeted while policy requires FULL verification, so the requirement is unavailable with a re-run recovery action and never PASS.
+  setup:
+    strategy: clone
+    branch: lab/pol-02-targeted-scope
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          changes:
+            models:
+              verification_scope: full
+    - name: append
+      path: app/models/product.rb
+      content: "\n  def lab_policy_probe\n    42\n  end\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-full-scope-models: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-03
+  title: Policy migration change executes FULL verification scope
+  category: engineering_policy
+  description: A migration triggers the conservative FULL fallback, the executed FULL scope satisfies the policy requirement, and the decision is PASS.
+  setup:
+    strategy: clone
+    branch: lab/pol-03-migration-full
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          rspec:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          changes:
+            migration:
+              verification_scope: full
+    - name: write
+      path: db/migrate/20260905000000_lab_policy.rb
+      content: "class LabPolicy < ActiveRecord::Migration[8.1]\n  def change\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-full-scope-migration: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-04
+  title: Policy dependency change requires BundlerAudit evidence
+  category: engineering_policy
+  description: A dependency change with BundlerAudit executed clean satisfies the analyzer requirement with real offline advisory evidence.
+  setup:
+    strategy: clone
+    branch: lab/pol-04-dependency
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          bundler_audit:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          changes:
+            dependencies:
+              require_analyzers: [bundler_audit]
+    - name: append
+      path: Gemfile
+      content: "\n# lab policy probe\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-analyzer-bundler_audit-for-dependencies: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-05
+  title: Policy changed-lines coverage above minimum satisfies
+  category: engineering_policy
+  description: Fully covered changed lines satisfy the changed-lines coverage requirement with crafted SimpleCov evidence.
+  setup:
+    strategy: clone
+    branch: lab/pol-05-coverage-pass
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          simplecov:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          coverage:
+            changed_lines_minimum: 85
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-coverage-changed-lines: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-06
+  title: Policy changed-lines coverage below minimum violates
+  category: engineering_policy
+  description: Half-covered changed lines violate the coverage requirement, so the decision is FAIL while the deterministic gate stays PASS.
+  setup:
+    strategy: clone
+    branch: lab/pol-06-coverage-fail
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          simplecov:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          coverage:
+            changed_lines_minimum: 85
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-coverage-changed-lines: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-07
+  title: Policy missing coverage evidence stays INCOMPLETE
+  category: engineering_policy
+  description: A coverage rule without observable coverage evidence is unavailable with a recovery action, never a silent PASS.
+  setup:
+    strategy: clone
+    branch: lab/pol-07-coverage-missing
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+          simplecov:
+            enabled: true
+            required: false
+        git:
+          base: main
+        engineering_policy:
+          coverage:
+            changed_lines_minimum: 85
+    - name: remove
+      path: coverage/coverage.json
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-coverage-changed-lines: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-08
+  title: Policy new critical finding violates while existing debt does not
+  category: engineering_policy
+  description: A baseline absorbs an existing low offense, then a new critical syntax offense violates the forbid rule and fails the decision.
+  setup:
+    strategy: clone
+    branch: lab/pol-08-new-critical
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          findings:
+            new_critical: forbid
+    - name: write
+      path: app/models/stale.rb
+      content: "x = 1   \n"
+    - name: commit
+      message: lab policy base with existing debt
+    - name: remove
+      path: .railverdict-baseline.json
+    - name: baseline_create
+    - name: write
+      path: app/models/broken.rb
+      content: "def broken(\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-new-findings-critical: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-09
+  title: Policy existing debt alone satisfies the new-findings rule
+  category: engineering_policy
+  description: With the baseline absorbing the only offense, the forbid rule is satisfied and existing debt is never reframed as new.
+  setup:
+    strategy: clone
+    branch: lab/pol-09-existing-debt
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          findings:
+            new_critical: forbid
+    - name: write
+      path: app/models/stale.rb
+      content: "x = 1   \n"
+    - name: commit
+      message: lab policy base with existing debt
+    - name: remove
+      path: .railverdict-baseline.json
+    - name: baseline_create
+    - name: write
+      path: app/models/clean_note.rb
+      content: "# lab policy note\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-new-findings-critical: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-10
+  title: Policy high-risk change requires human review without approval
+  category: engineering_policy
+  description: A migration under a high-risk review rule yields REVIEW_REQUIRED with exit 3 while the deterministic gate stays PASS and no approval is fabricated.
+  setup:
+    strategy: clone
+    branch: lab/pol-10-review-required
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+        engineering_policy:
+          review:
+            high:
+              human_review: required
+    - name: write
+      path: db/migrate/20260905000000_lab_policy.rb
+      content: "class LabPolicy < ActiveRecord::Migration[8.1]\n  def change\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 3
+  expected:
+    decision: REVIEW_REQUIRED
+    requirement_req-human-review-high: review_required
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-11
+  title: Policy mirrors gate byte-for-byte under a 1.6 configuration
+  category: engineering_policy
+  description: A 1.6 configuration without an engineering_policy section produces zero configured requirements and the decision mirrors the gate.
+  setup:
+    strategy: clone
+    branch: lab/pol-11-config-compat
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.6
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab policy note\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirements: []
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-12
+  title: Policy CLI and MCP project the identical envelope
+  category: engineering_policy
+  description: The MCP get_engineering_policy tool returns the same decision, requirement identities, and policy digest as the CLI policy command from the canonical service.
+  setup:
+    strategy: clone
+    branch: lab/pol-12-parity
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+        engineering_policy:
+          review:
+            high:
+              human_review: required
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab policy note\n"
+    - name: commit
+  command:
+    interface: mcp_policy
+    base: main
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    parity_pass: true
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-13
+  title: Policy change after receipt surfaces as drift
+  category: engineering_policy
+  description: A receipt created under one policy reports fresh, then reports policy_drift after the policy strengthens, without relabeling the receipt itself.
+  setup:
+    strategy: clone
+    branch: lab/pol-13-drift
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab policy note\n"
+    - name: commit
+  command:
+    interface: policy_drift
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    drift_pass: true
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-14
+  title: Policy repeated runs are byte-identical
+  category: engineering_policy
+  description: Two equivalent policy evaluations produce the identical canonical envelope, proving determinism of the planner and evaluator.
+  setup:
+    strategy: clone
+    branch: lab/pol-14-determinism
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: no_new_debt
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        git:
+          base: main
+        engineering_policy:
+          findings:
+            new_high: forbid
+          review:
+            high:
+              human_review: required
+    - name: write
+      path: db/migrate/20260905000000_lab_policy.rb
+      content: "class LabPolicy < ActiveRecord::Migration[8.1]\n  def change\n  end\nend\n"
+    - name: commit
+  command:
+    interface: policy_determinism
+    base: main
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    determinism_pass: true
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy
+- id: RVLAB-POL-15
+  title: Policy contradictory configuration fails closed
+  category: engineering_policy
+  description: An engineering_policy rule naming an unknown surface raises a configuration error and exits without a gate, never a silent PASS.
+  setup:
+    strategy: clone
+    branch: lab/pol-15-contradiction
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+        engineering_policy:
+          changes:
+            teleportation:
+              verification_scope: full
+    - name: write
+      path: db/migrate/20260905000000_lab_policy.rb
+      content: "class LabPolicy < ActiveRecord::Migration[8.1]\n  def change\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected: {}
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - engineering-policy

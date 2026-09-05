@@ -257,6 +257,72 @@ def package_surface(candidate, root)
   end
 end
 
+def deep_sort(value)
+  case value
+  when Hash then value.keys.sort_by(&:to_s).to_h { |key| [key, deep_sort(value[key])] }
+  when Array then value.map { |item| deep_sort(item) }
+  else value
+  end
+end
+
+def mcp_policy(candidate, work_dir, base)
+  base_sha = LabSupport.git(work_dir, "rev-parse", base).first.to_s.strip
+  raise "cannot resolve base #{base}" if base_sha.empty?
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25", "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    verify = parse_tool(client, "verify", "changed" => true, "base" => base_sha)
+    raise "mcp verify failed: #{verify['message']}" if verify["isError"]
+    policy = parse_tool(client, "get_engineering_policy", {})
+    raise "get_engineering_policy isError" if policy["isError"]
+    mcp_envelope = policy["engineering_policy"]
+    raise "get_engineering_policy missing envelope (#{policy['code']}: #{policy['message']})" unless mcp_envelope.is_a?(Hash)
+  ensure
+    client.close
+  end
+  cli_out, _cli_stderr, cli_status = LabSupport.product_run(candidate, ["policy", "--base", base, "--format", "json"], cwd: work_dir)
+  cli_json = LabSupport.json(cli_out)
+  mcp_ids = Array(mcp_envelope["requirements"]).map { |entry| entry["id"] }.sort
+  cli_ids = Array(cli_json["requirements"]).map { |entry| entry["id"] }.sort
+  pass = cli_status.exitstatus == 0 &&
+    mcp_envelope["decision"] == cli_json["decision"] &&
+    mcp_ids == cli_ids &&
+    mcp_envelope["policy_digest"] == cli_json["policy_digest"] &&
+    mcp_envelope["gate"] == cli_json["gate"]
+  { "lab_result" => { "mcp_decision" => mcp_envelope["decision"], "cli_decision" => cli_json["decision"], "parity_pass" => pass },
+    "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def policy_drift(candidate, work_dir)
+  receipt_path = File.join(work_dir, "tmp", "policy-drift-receipt.json")
+  _out, stderr, status = LabSupport.product_run(candidate, ["receipt", "create", "--format", "json", "--output", receipt_path], cwd: work_dir)
+  raise "receipt create failed: #{stderr}" unless status.success? && File.file?(receipt_path)
+  first_out, _, first_status = LabSupport.product_run(candidate, ["policy", "--receipt", receipt_path, "--format", "json"], cwd: work_dir)
+  first = LabSupport.json(first_out)
+  config_path = File.join(work_dir, ".railverdict.yml")
+  original = File.read(config_path)
+  File.write(config_path, "#{original.rstrip}\nengineering_policy:\n  findings:\n    new_critical: forbid\n")
+  second_out, _, second_status = LabSupport.product_run(candidate, ["policy", "--receipt", receipt_path, "--format", "json"], cwd: work_dir)
+  second = LabSupport.json(second_out)
+  File.write(config_path, original)
+  pass = first_status.success? && second_status.success? &&
+    first.dig("drift", "status") == "fresh" &&
+    second.dig("drift", "status") == "policy_drift" &&
+    second["decision"] == "PASS"
+  { "lab_result" => { "first_drift" => first.dig("drift", "status"), "second_drift" => second.dig("drift", "status"), "drift_pass" => pass },
+    "gate" => second["gate"] || "PASS", "completion_status" => second["completion_status"] || "complete",
+    "policy_status" => "pass", "exit_code" => second_status.exitstatus }
+end
+
+def policy_determinism(candidate, work_dir, base)
+  args = ["policy", "--base", base, "--format", "json"]
+  first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+  second, _, second_status = LabSupport.product_run(candidate, args, cwd: work_dir)
+  pass = first_status.exitstatus == second_status.exitstatus &&
+    JSON.generate(deep_sort(LabSupport.json(first))) == JSON.generate(deep_sort(LabSupport.json(second)))
+  { "lab_result" => { "determinism_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+
 def determinism(candidate, work_dir)
   args = ["check", "--format", "json"]
   first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
@@ -734,6 +800,12 @@ selected.each do |scenario|
                   mcp_handoff(candidate, work_dir, command.fetch("mode"), env)
                 when "mcp_protocol"
                   mcp_protocol(candidate, work_dir, command.fetch("mode"))
+                when "mcp_policy"
+                  mcp_policy(candidate, work_dir, command.fetch("base", "main"))
+                when "policy_drift"
+                  policy_drift(candidate, work_dir)
+                when "policy_determinism"
+                  policy_determinism(candidate, work_dir, command.fetch("base", "main"))
                when "agent"
                  agent_receipt(candidate, work_dir, command.fetch("mode"), env)
                when "bootstrap"
