@@ -1,6 +1,6 @@
 schema_version: '2.0'
-catalog_version: '4.1'
-description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED) + RH-01..RH-10 hardening (132 scenarios).
+catalog_version: '5.0'
+description: External black-box validation contract for the RailVerdict candidate (1.8 Agent Workflow & Review Orchestration over 1.7 Engineering Policy, 1.6 Change Intelligence, 1.5 Brakeman/targeted/reuse, 1.4 Handoff whole-set reuse — 173 scenarios).
 check_changed: &id001
   interface: cli
   args:
