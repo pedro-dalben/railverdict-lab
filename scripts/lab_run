@@ -431,6 +431,32 @@ def handoff_flow(candidate, work_dir, artifact_dir)
   base["lab_stdout_keys"] = base.keys
   base.merge("exit_code" => status2.exitstatus)
 end
+def handoff_policy_flow(candidate, work_dir, artifact_dir)
+  create_out, create_err, create_status = LabSupport.product_run(candidate, ["handoff", "create", "--format", "json"], cwd: work_dir)
+  raise "policy handoff create failed: #{create_err[0, 300]}" unless create_status.exitstatus == 0
+  ho_path = result_path(artifact_dir, "lab-policy-handoff.json")
+  File.write(ho_path, create_out)
+  config_path = File.join(work_dir, ".railverdict.yml")
+  File.open(config_path, "a") do |file|
+    file.write("\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 100\n")
+  end
+  out, err, status = LabSupport.product_run(candidate, ["policy", "--handoff", ho_path, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "policy-handoff-check.json"), out)
+  File.write(result_path(artifact_dir, "policy-handoff-check-diagnostics.log"), err)
+  begin
+    payload = LabSupport.json_strict(out)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  payload ||= { "lab_error" => "check_unparseable", "gate" => "UNKNOWN", "completion_status" => "UNKNOWN" }
+  payload["lab_stdout_empty"] = out.empty?
+  payload["lab_stdout_excerpt"] = out.byteslice(0, 4000)
+  payload["lab_stderr_excerpt"] = err.byteslice(0, 2000)
+  payload["lab_stdout_keys"] = payload.keys
+  payload.merge("exit_code" => status.exitstatus)
+end
+
 
 def receipt_swap_flow(candidate, work_dir, artifact_dir)
   target = "app/models/customer.rb"
@@ -1162,6 +1188,8 @@ selected.each do |scenario|
                   explain_flow(candidate, work_dir, artifact_dir)
                 when "handoff_flow"
                   handoff_flow(candidate, work_dir, artifact_dir)
+                when "handoff_policy"
+                  handoff_policy_flow(candidate, work_dir, artifact_dir)
                 when "receipt_swap"
                   receipt_swap_flow(candidate, work_dir, artifact_dir)
                 when "reuse_proof"

@@ -4428,6 +4428,7 @@ scenarios:
         - filename: app/models/lab_policy.rb
           coverage:
             lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+
         - filename: .railverdict.yml
           coverage:
             lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
@@ -6469,3 +6470,428 @@ scenarios:
   tags:
   - pr-intelligence
   - change-surfaces
+- id: DEEP-POL-COV-84
+  title: coverage just below the minimum violates the requirement
+  category: engineering_policy
+  description: 11 of 14 changed lines covered (78.57%) with minimum 84 violates the requirement and fails the decision.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 84\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-coverage-changed-lines: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-85
+  title: coverage just above the minimum satisfies the requirement
+  category: engineering_policy
+  description: 12 of 14 changed lines covered (85.71%) with minimum 85 satisfies the requirement and the decision mirrors the gate.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 85\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-coverage-changed-lines: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-86
+  title: coverage below a raised minimum violates the requirement
+  category: engineering_policy
+  description: The same 85.71% evidence with minimum 86 violates the requirement, proving the threshold is strict.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-coverage-changed-lines: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-ABOVE
+  title: coverage clearly above the minimum satisfies the requirement
+  category: engineering_policy
+  description: 13 of 14 changed lines covered (92.86%) with minimum 86 satisfies the requirement.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-coverage-changed-lines: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-HIGH-01
+  title: introduced high-severity finding violates the forbid rule
+  category: engineering_policy
+  description: A high-confidence Brakeman SQL injection warning outside the changed scope (simulated analyzer output; real Brakeman is absent from the lab bundle) leaves the scope-sensitive gate at PASS while the scope-independent forbid rule fails the decision.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-high
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: strict\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  brakeman:\n    enabled: true\n    required: true\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  findings:\n    new_high: forbid\n"
+    - name: fake_bundle
+      analyzer: brakeman
+      behavior: brakeman_warnings
+    - name: write
+      path: app/controllers/search_controller.rb
+      content: "class SearchController < ApplicationController\n  def index\n    @orders = Order.where(\"status = '#{params[:status]}'\")\n  end\nend\n"
+    - name: commit
+      message: high severity fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-new-findings-high: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - forbid-high
+- id: DEEP-POL-UNAVAIL-01
+  title: required analyzer that never executes is unavailable, never violated
+  category: engineering_policy
+  description: A models-surface rspec requirement with rspec disabled yields unavailable and INCOMPLETE instead of a fabricated failure.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-unavail
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  changes:\n    models:\n      require_analyzers:\n      - rspec\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep unavail touch\n"
+    - name: commit
+      message: unavail fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-analyzer-rspec-for-models: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - unavailable
+- id: DEEP-POL-CFG-01
+  title: zero coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum 0 fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 0\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-CFG-02
+  title: over-range coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum 101 fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 101\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-CFG-03
+  title: mistyped coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum high (string, not integer) fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: high\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-HANDOFF-01
+  title: strengthened policy after handoff is re-evaluated, never reused stale
+  category: engineering_policy
+  description: A handoff created without a coverage rule, followed by a minimum-100 rule with no coverage evidence, re-verifies under the current policy to INCOMPLETE instead of replaying the old PASS.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-handoff
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\ngit:\n  base: main\n"
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: handoff policy fixture
+  command:
+    interface: handoff_policy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-coverage-changed-lines: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - handoff-drift
+- id: DEEP-POL-COMPAT-01
+  title: oldest config version applies no new rules
+  category: engineering_policy
+  description: A version 1.0 configuration evaluates only mode-gated baseline machinery and mirrors the gate, with no new-rule requirements.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-compat
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.0\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep compat touch\n"
+    - name: commit
+      message: compat fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-baseline-compatible: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - compat

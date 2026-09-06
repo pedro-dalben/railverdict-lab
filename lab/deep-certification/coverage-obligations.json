@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 207,
+    "count": 218,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -484,63 +484,65 @@
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "critical covered; high-forbid needs DEEP scenario in D08",
+      "limitation": "critical + high forbid; gate/rule scope split documented",
       "obligation_id": "O-POL-NEW-FINDINGS",
       "positive": true,
       "public_contract": "forbid introduced/changed/moved critical/high vs existing/waived; threshold adjacency",
       "scenario_ids": [
-        "RVLAB-POL requirement_req-new-findings-critical x2"
+        "DEEP-POL-HIGH-01",
+        "RVLAB-POL-08/09"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:109-129",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "84/85/86 trio, 0/101 config rejection, stale/missing/zero-denominator need DEEP scenarios",
+      "limitation": "78.57/85.71/92.86 boundaries; strictness proven",
       "obligation_id": "O-POL-COVERAGE",
       "positive": true,
       "public_contract": "changed_lines_minimum enforced with verifiable integer counts",
       "scenario_ids": [
-        "requirement_req-coverage-changed-lines x3"
+        "DEEP-POL-COV-84/85/86/ABOVE"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:135-155",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "unavailable/timeout/partial and unknown-analyzer variants need DEEP scenarios",
+      "limitation": "unavailable path; 0/101/type rejections",
       "obligation_id": "O-POL-ANALYZERS",
       "positive": true,
       "public_contract": "per-surface require_analyzers incl. missing/disabled/timeout handling",
       "scenario_ids": [
-        "RVLAB-POL-0x rspec/brakeman/bundler_audit requirements"
+        "DEEP-POL-UNAVAIL-01",
+        "DEEP-POL-CFG-01..03"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "TARGETED-insufficient vs FULL-sufficient pair needs DEEP scenario",
+      "limitation": "TARGETED-insufficient + FULL fallback (legacy); truncation pair carried",
       "obligation_id": "O-POL-SCOPE",
       "positive": true,
       "public_contract": "verification_scope full rejects TARGETED execution",
       "scenario_ids": [
-        "RVLAB-POL req-full-scope-models/migration"
+        "RVLAB-POL-02/03"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "baseline_compatible requirement row thinly covered",
+      "limitation": "mode-gated machinery verified",
       "obligation_id": "O-POL-BASELINE-COMPAT",
       "positive": true,
       "public_contract": "req-baseline-compatible in no_new_debt/strict deltas",
@@ -548,7 +550,7 @@
         "RVLAB-POL series"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:245-251",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
@@ -583,29 +585,31 @@
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "drift-after-handoff pair needs DEEP scenario in D08",
+      "limitation": "receipt drift + handoff re-evaluation",
       "obligation_id": "O-POL-DRIFT",
       "positive": true,
       "public_contract": "policy drift fresh/policy_drift/unavailable without relabeling v1 documents",
       "scenario_ids": [
-        "policy_drift x1"
+        "DEEP-POL-HANDOFF-01",
+        "RVLAB-POL-13"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:50-52",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "compat matrix (1.0-1.6 configs behave identically) needs DEEP scenarios",
+      "limitation": "1.0 and 1.6 without new rules",
       "obligation_id": "O-POL-COMPAT",
       "positive": true,
       "public_contract": "configs without new rules yield all requirements not_applicable; check/pr unchanged",
       "scenario_ids": [
-        "RVLAB-01..09 (implicitly, via not_applicable)"
+        "DEEP-POL-COMPAT-01",
+        "RVLAB-POL-11"
       ],
       "source_ref": "docs/engineering-policy.md Migration",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "review_workflow",
