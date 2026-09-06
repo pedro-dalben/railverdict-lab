@@ -328,4 +328,35 @@ class LabOracleTrustTest < Minitest::Test
   ensure
     FileUtils.rm_rf(root)
   end
+  # D11 adversarial fuzz: fixed-seed mutations of a passing payload must
+  # never crash the oracle and never certify. Exit is 1 (verdict mismatch)
+  # or 2 (harness error); stdout stays a single JSON document on exit 1.
+  def test_seeded_mutation_battery_never_certifies_garbage
+    rng = Random.new(18282)
+    base = { "gate" => "FAIL", "completion_status" => "complete", "comparison" => { "counts" => { "introduced" => 1 } },
+             "findings" => [{ "state" => "introduced" }] }
+    mutants = []
+    40.times do
+      payload = Marshal.load(Marshal.dump(base))
+      case rng.rand(8)
+      when 0 then payload.delete(%w[gate completion_status].sample(random: rng))
+      when 1 then payload["gate"] = [true, 0, nil, [], {}].sample(random: rng)
+      when 2 then payload["comparison"] = { "counts" => { "introduced" => [true, "1", nil].sample(random: rng) } }
+      when 3 then payload["findings"] = [false, 0, "x", nil].sample(random: rng)
+      when 4 then payload["comparison"] = { "counts" => { "introduced" => 0 } }
+      when 5 then payload["findings"] = [{ "state" => ["existing", nil].sample(random: rng) }]
+      when 6 then payload.delete("comparison"); payload.delete("findings")
+      when 7 then payload["gate"] = "FAIL\u0000ANSI-\u001b[31m-tail"
+      end
+      mutants << payload
+    end
+    mutants << {}
+    mutants << { "gate" => "FAIL", "completion_status" => "complete", "comparison" => { "counts" => { "introduced" => 1 } },
+                 "findings" => [{ "state" => "introduced" }] * 500 }
+    mutants.each_with_index do |payload, index|
+      stdout, _stderr, status = run_oracle("RVLAB-03", payload, 1)
+      assert_includes [1, 2], status.exitstatus, "mutant #{index} exited #{status.exitstatus}"
+      JSON.parse(stdout) if status.exitstatus == 1
+    end
+  end
 end

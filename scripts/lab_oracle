@@ -134,6 +134,13 @@ def evaluate(scenario, actual, exit_code)
         "resolved" => 0
       }
     end
+  derived_triple = {
+    "introduced" => findings.count { |item| item.is_a?(Hash) && item["state"] == "introduced" },
+    "existing" => findings.count { |item| item.is_a?(Hash) && item["state"] == "existing" },
+    "waived" => findings.count { |item| item.is_a?(Hash) && (item["state"] == "waived" || item["waived"]) }
+  }
+  raw_findings = product.key?("findings") ? product["findings"] : (product["gate_result"].is_a?(Hash) ? product["gate_result"]["findings"] : nil)
+  findings_malformed = (product.key?("findings") || (product["gate_result"].is_a?(Hash) && product["gate_result"].key?("findings"))) && !raw_findings.is_a?(Array)
   %w[introduced existing waived resolved].each do |key|
     %w[min max count].each do |suffix|
       expectation_key = "#{key}_#{suffix}"
@@ -145,11 +152,22 @@ def evaluate(scenario, actual, exit_code)
         missing.call(expectation_key, expectation, "missing_counts")
         next
       end
+      if count_source == "stated" && findings_malformed && %w[introduced existing waived].include?(key)
+        checks << { "name" => expectation_key, "expected" => expectation, "actual" => "malformed_findings:#{type_family(raw_findings)}",
+                    "matched" => false, "expected_type" => type_family(expectation), "actual_type" => "malformed",
+                    "evaluated" => true, "source" => count_source }
+        next
+      end
       matched = case suffix
                 when "min" then value.is_a?(Numeric) && expectation.is_a?(Numeric) && value >= expectation
                 when "max" then value.is_a?(Numeric) && expectation.is_a?(Numeric) && value <= expectation
                 else strict_match(expectation, value)
                 end
+      if count_source == "stated" && findings_present && %w[introduced existing waived].include?(key) &&
+          value.is_a?(Numeric) && derived_triple[key] != value
+        matched = false
+        value = "inconsistent: stated #{value} vs findings #{derived_triple[key]}"
+      end
       checks << { "name" => expectation_key, "expected" => expectation, "actual" => value, "matched" => matched,
                   "expected_type" => type_family(expectation), "actual_type" => type_family(value),
                   "evaluated" => true, "source" => count_source }
@@ -524,6 +542,14 @@ if options[:self_test]
                                                         "expected" => { "focus_unmapped_paths_count" => 2 }),
                                              { "gate" => "PASS", "completion_status" => "complete",
                                                "review_focus" => [{ "surface" => "unmapped", "paths" => %w[a b] }] }, 0)["all_matched"])
+  count_base = base.merge("expected_gate" => "FAIL", "expected_completion" => "complete", "expected_exit" => 1,
+                          "expected" => { "introduced_min" => 1 })
+  consistent = { "gate" => "FAIL", "completion_status" => "complete",
+                 "comparison" => { "counts" => { "introduced" => 1 } }, "findings" => [{ "state" => "introduced" }] }
+  check_self.call("counts-consistent", evaluate(count_base, consistent, 1)["all_matched"])
+  check_self.call("counts-inconsistent", !evaluate(count_base, consistent.merge("findings" => []), 1)["all_matched"])
+  check_self.call("counts-malformed", !evaluate(count_base, consistent.merge("findings" => false), 1)["all_matched"])
+  check_self.call("counts-null", !evaluate(count_base, consistent.merge("findings" => nil), 1)["all_matched"])
   if failures.empty?
     $stderr.puts "oracle self-test: PASS (#{LAB_ORACLE_VERSION})"
     puts "oracle self-test: PASS"

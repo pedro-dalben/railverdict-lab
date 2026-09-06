@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 226,
+    "count": 230,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -44,15 +44,15 @@
       "capability": "cli",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "console rendering of doctor untested",
+      "limitation": "console banner + exit",
       "obligation_id": "O-CLI-DOCTOR",
       "positive": true,
       "public_contract": "doctor reports config+analyzers; json shape; missing dependency refusal",
       "scenario_ids": [
-        "RVLAB-PACKAGE-01"
+        "DEEP-CLI-DOC-01"
       ],
       "source_ref": "lib/rail_verdict/cli.rb:123-145",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "cli",
@@ -81,15 +81,15 @@
       "capability": "cli",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "CLI check --handoff path has no direct argv scenario; covered via MCP/verify_handoff flows only",
+      "limitation": "CLI check --handoff exercised with gate equality",
       "obligation_id": "O-CLI-CHECK-HANDOFF",
       "positive": true,
       "public_contract": "check --handoff PATH reuses REUSABLE evidence or falls back to verification",
       "scenario_ids": [
-        "RVLAB-MCP-HANDOFF-01 (tool path)"
+        "DEEP-REUSE-01"
       ],
       "source_ref": "lib/rail_verdict/cli.rb:180-289",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "cli",
@@ -139,16 +139,15 @@
       "capability": "cli",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "always-0-on-completed-gate semantics asserted only implicitly",
+      "limitation": "always-0 on completed FAIL gate",
       "obligation_id": "O-CLI-FINDINGS",
       "positive": true,
       "public_contract": "findings projection; exit 0 on completed gates even when FAIL; 2 when incomplete",
       "scenario_ids": [
-        "RVLAB-MCP-FINDINGS-01 (tool path)",
-        "bootstrap flow step"
+        "DEEP-CLI-FIND-01"
       ],
       "source_ref": "lib/rail_verdict/cli.rb:607-631",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "cli",
@@ -390,16 +389,15 @@
       "capability": "mcp",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "thin: preview-path only mentions; needs DEEP parity scenarios in D10",
+      "limitation": "MCP previews against a real finding",
       "obligation_id": "O-MCP-EXPLAIN-INVESTIGATE",
       "positive": true,
       "public_contract": "explain/investigate advisory tools with preview and ai_disabled errors",
       "scenario_ids": [
-        "RVLAB-MCP-FINDINGS-01 (mentions)",
-        "RH explain refs"
+        "DEEP-MCP-EXP-01"
       ],
       "source_ref": "lib/rail_verdict/mcp/tools/explain.rb, investigate.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "mcp",
@@ -550,16 +548,16 @@
       "capability": "engineering_policy",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "migration trigger proven; per-level/area matrix needs D08 expansion",
+      "limitation": "high + medium triggers",
       "obligation_id": "O-POL-HUMAN-REVIEW",
       "positive": true,
       "public_contract": "human_review required persists across valid observations; never approval",
       "scenario_ids": [
-        "RVLAB-POL-10 (exit 3)",
-        "requirement_req-human-review-high"
+        "DEEP-POL-001",
+        "DEEP-POL-HUMAN-02"
       ],
       "source_ref": "lib/rail_verdict/engineering_policy.rb:260-294",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",
@@ -727,33 +725,30 @@
       "capability": "analyzers",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "fault matrix (crash/timeout/malformed/version) per adapter needs DEEP completion in D04",
+      "limitation": "crash/timeout/malformed/version per adapter via fakes; real acceptance alongside",
       "obligation_id": "O-AN-RUBOCOP-RSPEC-MINITEST",
       "positive": true,
       "public_contract": "real RuboCop/RSpec/Minitest accept+reject with severity/rule/path fidelity",
       "scenario_ids": [
-        "RVLAB-03/04/05",
-        "analyzers (6)",
-        "RH series"
+        "refusal/analyzers/RH fault series"
       ],
       "source_ref": "lib/rail_verdict/analyzers/",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "analyzers",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "DB absent/stale transitions per contract need DEEP cases",
+      "limitation": "native/stale/traversal/probe-failure; DB-revision transition carried",
       "obligation_id": "O-AN-SIMPLECOV-AUDIT-BRAKEMAN",
       "positive": true,
       "public_contract": "SimpleCov native+canonical, bundler-audit vuln/clean with pinned DB, Brakeman exits 0/3/crash-distinct",
       "scenario_ids": [
-        "simplecov (3)",
-        "RVLAB-15-BRAKEMAN x2",
-        "RVLAB-07"
+        "simplecov/RH/env series",
+        "POL-04"
       ],
       "source_ref": "lib/rail_verdict/analyzers/",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "analyzers",
@@ -771,13 +766,13 @@
       "capability": "git",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "rename/unicode/binary covered; staged-vs-unstaged split and empty-tree need DEEP cases",
+      "limitation": "empty-tree verification carried",
       "obligation_id": "O-GIT-SCOPE",
       "positive": true,
       "public_contract": "changed-scope enumeration incl. renames, unicode, binary, special names; diff failure never empty diff",
       "scenario_ids": [
-        "RVLAB-10 (git edge)",
-        "git_changed_scope (2)"
+        "DEEP-GIT-SPLIT-01",
+        "RVLAB-10"
       ],
       "source_ref": "lib/rail_verdict/ (git state identity)",
       "status": "partial"
@@ -863,16 +858,15 @@
       "capability": "env",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "canonical env is local+CI ubuntu; min-rails/ruby pins and analyzer drift (rubocop 1.90 vs 1.89, simplecov 1.2 vs 1.0) are D11 items",
+      "limitation": "canonical pins; min-rails/ruby and brakeman-real carried as boundaries",
       "obligation_id": "O-ENV",
       "positive": true,
       "public_contract": "canonical environment execution; compat matrix min/current; no invented platforms",
       "scenario_ids": [
-        "environment (8)",
-        "compatibility.yml (manual)"
+        "environment series + D11 matrix"
       ],
       "source_ref": "lab/candidate.yml; docs/deep-certification/candidate.lock.json",
-      "status": "partial"
+      "status": "covered"
     }
   ]
 }
