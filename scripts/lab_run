@@ -838,6 +838,8 @@ def agent_receipt(candidate, work_dir, mode, env = {})
       FileUtils.rm_rf(clone_a)
       FileUtils.rm_rf(clone_b)
     end
+  when "stage_only_mutation"
+    document, = receipt_create(candidate, work_dir, env: env)
     receipt_path = write_temp_receipt(work_dir, document)
     LabSupport.write_file(work_dir, "brand_new_module.rb", "# staged only\n")
     LabSupport.git(work_dir, "add", "brand_new_module.rb")

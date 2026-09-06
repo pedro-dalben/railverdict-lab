@@ -3,11 +3,11 @@ catalog_version: '5.0'
 candidate:
   mode: published
   gem_name: rail_verdict
-  gem_version: 1.7.0
+  gem_version: 1.8.0
   repository: https://github.com/pedro-dalben/RailVerdict.git
   source_sha: HEAD
-  tag: v1.7.0
-  gem_sha256: 920ce580db2e915e77890a4a1ec72afa4fc6deea56118537b07b45b941d8557b
+  tag: v1.8.0
+  gem_sha256: de538bc17c6c302becb3b3d4b7cd60f3c8de442ce2c264518808ef0829e4d6c9
   frozen_at: '2026-09-05T12:00:00Z'
   scenario_catalog_version: '5.0'
 environment:
