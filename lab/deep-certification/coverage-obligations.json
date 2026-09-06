@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 190,
+    "count": 197,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -804,32 +804,31 @@
       "capability": "handoff",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "per-analyzer predicates and partial-reuse refusal need DEEP matrix in D06",
+      "limitation": "tiered subprocess proof; advisory-DB-revision change untested edge",
       "obligation_id": "O-REUSE",
       "positive": true,
       "public_contract": "whole-set and tiered reuse; RECEIPT_FRESH != EVIDENCE_REUSABLE; reuse is execution avoidance with wrapper proof",
       "scenario_ids": [
-        "RVLAB-MCP-HANDOFF-01",
-        "mcp_handoff x5",
-        "test_selection x2"
+        "DEEP-REUSE-01",
+        "RVLAB-MCP-HANDOFF-01"
       ],
       "source_ref": "docs/adr/0019; docs/agent-handoff.md",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "selection",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "lib/ mapping fixed in 1.8.1 needs explicit RSpec+Minitest regression pair (DEEP in D06)",
+      "limitation": "lib RSpec/Minitest targeted, unmapped fallback with reason, semantic negative control",
       "obligation_id": "O-SELECTION",
       "positive": true,
       "public_contract": "targeted mapping per convention + FULL fallback classes; lib/ regression 1.8.1",
       "scenario_ids": [
-        "RVLAB-15-TARGETED x2",
-        "test_selection x2"
+        "DEEP-SEL-LIB-01..03",
+        "DEEP-SEL-SEM-01"
       ],
       "source_ref": "lib/rail_verdict/rails_context/resolvers/test_candidates.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "repair",

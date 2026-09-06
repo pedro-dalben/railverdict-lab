@@ -361,6 +361,8 @@ module LabSupport
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nkill -TERM $$"
     when "oversized"
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nhead -c 200000 /dev/zero; exit 0"
+    when "record_reuse"
+      "L=\"$PWD/..\"; echo \"$$ $*\" >> \"$L/reuse-$PPID.log\""
     else
       raise "unknown fake bundle behavior: #{behavior}"
     end

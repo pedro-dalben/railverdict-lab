@@ -5746,3 +5746,215 @@ scenarios:
   - freshness
   - git-identity
   - deep
+- id: DEEP-SEL-LIB-01
+  title: lib change with an RSpec candidate runs targeted without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with spec/lib/pricing_spec.rb present selects the candidate test and passes (1.8.1 crash regression).
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-rspec
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: spec/lib/pricing_spec.rb
+      content: "require \"spec_helper\"\nrequire_relative \"../../lib/pricing\"\n\nRSpec.describe Pricing do\n  it \"discounts\" do\n    expect(Pricing.discount(100)).to eq(90.0)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: replace
+      path: spec/lib/pricing_spec.rb
+      from: 'eq(90.0)'
+      to: 'eq(85.0)'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-LIB-02
+  title: lib change without a candidate falls back to full without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with no test candidate falls back to the full suite and passes (1.8.1 crash regression on the unmapped path).
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-nocand
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-LIB-03
+  title: lib change with a Minitest candidate runs targeted without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with test/lib/pricing_test.rb present selects the candidate Minitest file and passes.
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-minitest
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  minitest:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: test/lib/pricing_test.rb
+      content: "require \"test_helper\"\nrequire_relative \"../../lib/pricing\"\n\nclass PricingTest < Minitest::Test\n  def test_discount\n    assert_equal 90.0, Pricing.discount(100)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: replace
+      path: test/lib/pricing_test.rb
+      from: 'assert_equal 90.0'
+      to: 'assert_equal 85.0'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: minitest
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-SEM-01
+  title: breaking a lib file without updating its test fails the targeted run
+  category: test_selection
+  description: Changing lib/pricing.rb behavior while leaving the candidate spec green-side up makes the targeted selection execute the mapped test and report FAIL, proving selection is not a vacuous pass.
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-semantic
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: spec/lib/pricing_spec.rb
+      content: "require \"spec_helper\"\nrequire_relative \"../../lib/pricing\"\n\nRSpec.describe Pricing do\n  it \"discounts\" do\n    expect(Pricing.discount(100)).to eq(90.0)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.5'
+    - name: commit
+      message: selection breaks behavior
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-REUSE-01
+  title: static evidence reuses while dynamic tests execute fresh
+  category: test_selection
+  description: A transparent bundle wrapper counts subprocesses across a fresh check and a handoff-backed check. RuboCop analysis runs must drop to zero on reuse while RSpec analysis still executes, with identical gates.
+  setup:
+    strategy: clone
+    branch: lab/deep-reuse
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: reuse fixture
+  command:
+    interface: reuse_proof
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    reuse_tiered: true
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - evidence-reuse

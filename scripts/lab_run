@@ -452,6 +452,57 @@ def receipt_swap_flow(candidate, work_dir, artifact_dir)
   { "lab_result" => { "receipt_swap_stale" => stale, "reasons" => reasons }, "lab_synthesized_gate" => true,
     "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
 end
+def reuse_logs_since(known)
+  current = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  current - known
+end
+
+def reuse_proof(candidate, work_dir, artifact_dir)
+  LabSupport.install_fake_bundle(work_dir, { "behavior" => "record_reuse", "analyzer" => "all" })
+  fake_bin = File.join(work_dir, "tmp", "fake-bin")
+  env = { "PATH" => "#{fake_bin}:#{ENV.fetch('PATH', '')}" }
+  check_args = ["check", "--changed", "--base", "main", "--format", "json"]
+  known = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  out1, err1, status1 = LabSupport.product_run(candidate, check_args, cwd: work_dir, extra_env: env)
+  raise "reuse proof fresh run failed: #{err1[0, 300]}" unless [0, 1].include?(status1.exitstatus)
+  doc1 = LabSupport.json_strict(out1)
+  fresh_files = reuse_logs_since(known)
+  raise "wrapper recorded no subprocesses on the fresh run" if fresh_files.empty?
+  ho_out, ho_err, ho_status = LabSupport.product_run(candidate, ["handoff", "create", "--changed", "--base", "main", "--format", "json"], cwd: work_dir, extra_env: env)
+  raise "reuse proof handoff create failed: #{ho_err[0, 300]}" unless ho_status.exitstatus == 0
+  ho_path = result_path(artifact_dir, "lab-reuse-handoff.json")
+  File.write(ho_path, ho_out)
+  known2 = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  out2, err2, status2 = LabSupport.product_run(candidate, check_args + ["--handoff", ho_path], cwd: work_dir, extra_env: env)
+  raise "reuse proof reuse run failed: #{err2[0, 300]}" unless [0, 1].include?(status2.exitstatus)
+  doc2 = LabSupport.json_strict(out2)
+  reuse_files = reuse_logs_since(known2)
+  classify = lambda do |files|
+    counts = Hash.new(0)
+    files.each do |file|
+      File.readlines(file).map(&:strip).each do |line|
+        kind = (line.include?("--version") || line.include?("Minitest::VERSION")) ? "probe" : "analysis"
+        %w[rubocop rspec minitest brakeman bundler-audit].each do |analyzer|
+          counts["#{analyzer}_#{kind}"] += 1 if line.include?(analyzer)
+        end
+      end
+    end
+    counts
+  end
+  fresh = classify.call(fresh_files)
+  reused = classify.call(reuse_files)
+  tiered = doc1["gate"] == doc2["gate"] && doc1["gate"] == "PASS" &&
+    fresh["rubocop_analysis"] >= 1 && reused["rubocop_analysis"] == 0 &&
+    reused["rspec_analysis"] >= 1
+  File.write(result_path(artifact_dir, "reuse-counts.json"), JSON.pretty_generate({ "fresh" => fresh, "reused" => reused, "gate1" => doc1["gate"], "gate2" => doc2["gate"] }))
+  (fresh_files + reuse_files).each_with_index do |file, index|
+    FileUtils.mv(file, result_path(artifact_dir, "wrapper-#{index}.log"))
+  end
+  { "lab_result" => { "reuse_tiered" => tiered, "fresh_counts" => fresh, "reused_counts" => reused },
+    "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
 
 
 def mcp_review(candidate, work_dir, base)
@@ -1113,6 +1164,8 @@ selected.each do |scenario|
                   handoff_flow(candidate, work_dir, artifact_dir)
                 when "receipt_swap"
                   receipt_swap_flow(candidate, work_dir, artifact_dir)
+                when "reuse_proof"
+                  reuse_proof(candidate, work_dir, artifact_dir)
                 when "mcp_review"
                   mcp_review(candidate, work_dir, command.fetch("base", "main"))
                 when "review_determinism"
