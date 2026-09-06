@@ -5293,3 +5293,390 @@ scenarios:
   tags:
   - review
   - workflow
+- id: DEEP-CLI-SARIF-01
+  title: doctor rejects sarif with a usage error
+  category: refusal
+  description: doctor --format sarif must fail closed (exit 2, empty stdout, usage on stderr) instead of silently rendering console.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - doctor
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-02
+  title: baseline create rejects sarif with a usage error
+  category: refusal
+  description: baseline create --format sarif must fail closed before any baseline write.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - baseline
+    - create
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-03
+  title: findings rejects sarif with a usage error
+  category: refusal
+  description: findings --format sarif must fail closed instead of silently rendering console.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - findings
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-04
+  title: explain rejects sarif before finding resolution
+  category: refusal
+  description: explain --format sarif must fail on the format before resolving the finding ref.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - explain
+    - rv:00000000000000000000
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-05
+  title: repair build rejects sarif before packet assembly
+  category: refusal
+  description: repair --format sarif must fail on the format before building any packet.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - repair
+    - rv:00000000000000000000
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-06
+  title: check keeps a machine-readable sarif document
+  category: acceptance
+  description: check --format sarif on a clean tree stays exit 0 with top-level version and runs keys.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_keys_include:
+    - version
+    - runs
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-INV-01
+  title: investigate preview dispatches and returns manifests
+  category: acceptance
+  description: investigate --preview-context --format json exits 0 with a manifests document (regression for the undispatched command).
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - investigate
+    - --preview-context
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_keys_include:
+    - manifests
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CONSOLE-01
+  title: console check prints the passing gate word
+  category: acceptance
+  description: check --format console on a clean tree exits 0 and prints Gate PASS coherently with the JSON verdict.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - console
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_contains: 'Gate: PASS'
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CFG-01
+  title: unknown configuration version is incomplete
+  category: refusal
+  description: version 99 config yields INCOMPLETE/incomplete exit 2 with a configuration operational failure.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 99\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-02
+  title: unknown configuration key is incomplete
+  category: refusal
+  description: A bogus top-level config key yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nbogus_key: true\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-03
+  title: mistyped configuration value is incomplete
+  category: refusal
+  description: mode 42 (integer, not enum) yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: 42\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CONSOLE-02
+  title: console check prints the failing gate word
+  category: acceptance
+  description: check --format console with an introduced offense exits 1 and prints Gate FAIL.
+  setup:
+    strategy: clone
+    branch: lab/deep-console-fail
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - console
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 1
+  expected:
+    stdout_empty: false
+    stdout_contains: 'Gate: FAIL'
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CFG-04
+  title: unparseable configuration is incomplete
+  category: refusal
+  description: Invalid YAML yields INCOMPLETE/incomplete exit 2, never a gate.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "{{{\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-05
+  title: disabled-but-required analyzer invariant is incomplete
+  category: refusal
+  description: enabled false with required true violates the config invariant and yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: false\n    required: true\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-INT-01
+  title: SIGINT during verification exits 130 with a real interrupted verdict
+  category: refusal
+  description: Sending INT to a running check terminates it with exit 130 and a genuine INCOMPLETE verdict carrying the interrupted operational failure.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: interrupt
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 130
+  expected:
+    interrupted_exit_130: true
+  cleanup: remove_worktree
+  tags:
+  - refusal
+  - cli-surface

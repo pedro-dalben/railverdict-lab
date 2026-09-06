@@ -49,9 +49,19 @@ class LabInfrastructureTest < Minitest::Test
     refusal = @manifest.fetch("scenarios").select { |scenario| scenario["category"] == "refusal" }
     assert_operator refusal.length, :>=, 14
     refusal.each do |scenario|
-      assert_equal "INCOMPLETE", scenario.fetch("expected_gate"), scenario["id"]
-      assert_equal "incomplete", scenario.fetch("expected_completion"), scenario["id"]
-      assert_equal 2, scenario.fetch("expected_exit"), scenario["id"]
+      gate = scenario.fetch("expected_gate")
+      completion = scenario.fetch("expected_completion")
+      if gate == "UNKNOWN"
+        # Usage-error paths carry no verdict: they must judge exit plus
+        # lab-observed process facts instead of asserting nothing.
+        assert_equal "UNKNOWN", completion, scenario["id"]
+        facts = (scenario["expected"] || {}).keys
+        assert((facts & %w[stdout_empty stderr_contains stdout_contains stdout_keys_include]).any?, scenario["id"])
+      else
+        assert_equal "INCOMPLETE", gate, scenario["id"]
+        assert_equal "incomplete", completion, scenario["id"]
+      end
+      assert [2, 130].include?(scenario.fetch("expected_exit")), scenario["id"]
     end
   end
 

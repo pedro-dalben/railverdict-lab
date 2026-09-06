@@ -456,6 +456,39 @@ def policy_determinism(candidate, work_dir, base)
   { "lab_result" => { "determinism_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
 end
 
+def interrupt_flow(candidate, work_dir, artifact_dir)
+  stdout_text = +""
+  stderr_text = +""
+  exit_code = nil
+  Open3.popen3(candidate.env, candidate.command, "check", "--format", "json", chdir: work_dir) do |stdin, stdout, stderr, wait|
+    stdin.close
+    sleep 1.0
+    begin
+      Process.kill("INT", wait.pid)
+    rescue Errno::ESRCH, Errno::EPERM
+      nil
+    end
+    stdout_text = stdout.read
+    stderr_text = stderr.read
+    exit_code = wait.value.exitstatus
+  end
+  File.write(result_path(artifact_dir, "interrupt-stdout.txt"), stdout_text)
+  File.write(result_path(artifact_dir, "interrupt-stderr.txt"), stderr_text)
+  begin
+    payload = LabSupport.json_strict(stdout_text)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  payload ||= { "lab_error" => "interrupt_stdout_unparseable", "gate" => "UNKNOWN", "completion_status" => "UNKNOWN" }
+  payload["lab_result"] = { "interrupted_exit_130" => exit_code == 130 }
+  payload["lab_stdout_empty"] = stdout_text.empty?
+  payload["lab_stdout_excerpt"] = stdout_text.byteslice(0, 4000)
+  payload["lab_stderr_excerpt"] = stderr_text.byteslice(0, 2000)
+  payload["lab_stdout_keys"] = payload.keys
+  payload.merge("exit_code" => exit_code)
+end
+
 def determinism(candidate, work_dir)
   args = ["check", "--format", "json"]
   first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
@@ -934,6 +967,7 @@ selected.each do |scenario|
     else
       LabSupport.clone_fixture(ROOT, work_dir, branch: setup["branch"])
     end
+    fixture_base = LabSupport.fixture_identity(work_dir)
     env = LabSupport.apply_operations(work_dir, setup.fetch("operations", []), candidate: candidate, env: env)
     fixture_before = LabSupport.fixture_identity(work_dir)
     interface = command.fetch("interface")
@@ -954,6 +988,10 @@ selected.each do |scenario|
                     payload = { "lab_error" => parse_error || "stdout_not_an_object", "lab_stdout_bytes" => stdout.bytesize }
                   end
                   payload["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  payload["lab_stdout_empty"] = stdout.empty?
+                  payload["lab_stdout_excerpt"] = stdout.byteslice(0, 4000)
+                  payload["lab_stderr_excerpt"] = stderr.byteslice(0, 2000)
+                  payload["lab_stdout_keys"] = payload.keys
                   payload.merge("exit_code" => status.exitstatus)
                 when "cli_sarif"
                   step_timeout = command["timeout_seconds"] || scenario["timeout_seconds"]
@@ -974,6 +1012,9 @@ selected.each do |scenario|
                                "exit_code" => status.exitstatus }
                   envelope["lab_result"]["lab_parse_error"] = sarif["lab_error"] if sarif.is_a?(Hash) && sarif["lab_error"]
                   envelope["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  envelope["lab_stdout_empty"] = stdout.empty?
+                  envelope["lab_stdout_excerpt"] = stdout.byteslice(0, 4000)
+                  envelope["lab_stderr_excerpt"] = stderr.byteslice(0, 2000)
                   envelope
                when "mcp_repair"
                  mcp_repair(candidate, work_dir, command.fetch("cheat"))
@@ -1011,9 +1052,12 @@ selected.each do |scenario|
                  determinism(candidate, work_dir)
                when "determinism_multi"
                  determinism_multi(candidate, work_dir, command.fetch("iterations", 20))
+               when "interrupt"
+                 interrupt_flow(candidate, work_dir, artifact_dir)
                else
                  raise "unknown scenario interface #{interface}"
                end
+    observed["fixture_base"] = fixture_base
     observed["fixture_before"] = fixture_before
     observed["fixture_after"] = LabSupport.fixture_identity(work_dir)
     observed["candidate"] = candidate.identity

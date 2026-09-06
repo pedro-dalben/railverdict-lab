@@ -228,8 +228,8 @@ module LabSupport
         gem_name = operation.fetch("gem")
         gemfile = File.join(work_dir, "Gemfile")
         File.write(gemfile, File.readlines(gemfile).reject { |line| line.include?("gem \"#{gem_name}\"") }.join)
-        _stdout, stderr, status = run(["bundle", "lock", "--remove", gem_name], cwd: work_dir)
-        raise "bundle lock --remove failed: #{stderr}" unless status.success?
+        _stdout, stderr, status = run(["bundle", "lock", "--local"], cwd: work_dir)
+        raise "bundle lock --local failed: #{stderr}" unless status.success?
       when "fake_bundle"
         install_fake_bundle(work_dir, operation)
         env["PATH"] = "#{File.join(work_dir, "tmp", "fake-bin")}:#{ENV.fetch("PATH", "")}".freeze

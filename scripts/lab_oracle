@@ -264,9 +264,55 @@ def evaluate(scenario, actual, exit_code)
                   "actual_type" => "array", "evaluated" => true, "source" => "product" }
     end
   end
+  if expected.key?("stdout_empty")
+    if !product.key?("lab_stdout_empty")
+      missing.call("stdout_empty", expected["stdout_empty"], "missing_stdout_facts")
+    else
+      record.call("stdout_empty", expected["stdout_empty"], product["lab_stdout_empty"], "lab_result")
+    end
+  end
+
+  if expected.key?("stderr_contains")
+    if !product.key?("lab_stderr_excerpt")
+      missing.call("stderr_contains", expected["stderr_contains"], "missing_stdout_facts")
+    else
+      excerpt = product["lab_stderr_excerpt"]
+      expectation = expected["stderr_contains"]
+      matched = excerpt.is_a?(String) && expectation.is_a?(String) && excerpt.include?(expectation)
+      checks << { "name" => "stderr_contains", "expected" => expectation, "actual" => excerpt, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(excerpt),
+                  "evaluated" => true, "source" => "lab_result" }
+    end
+  end
+
+  if expected.key?("stdout_contains")
+    if !product.key?("lab_stdout_excerpt")
+      missing.call("stdout_contains", expected["stdout_contains"], "missing_stdout_facts")
+    else
+      excerpt = product["lab_stdout_excerpt"]
+      expectation = expected["stdout_contains"]
+      matched = excerpt.is_a?(String) && expectation.is_a?(String) && excerpt.include?(expectation)
+      checks << { "name" => "stdout_contains", "expected" => expectation, "actual" => excerpt, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(excerpt),
+                  "evaluated" => true, "source" => "lab_result" }
+    end
+  end
+
+  if expected.key?("stdout_keys_include")
+    if !product.key?("lab_stdout_keys")
+      missing.call("stdout_keys_include", expected["stdout_keys_include"], "missing_stdout_facts")
+    else
+      keys = product["lab_stdout_keys"]
+      expectation = expected["stdout_keys_include"]
+      matched = keys.is_a?(Array) && expectation.is_a?(Array) && expectation.all? { |key| keys.include?(key) }
+      checks << { "name" => "stdout_keys_include", "expected" => expectation, "actual" => keys, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(keys),
+                  "evaluated" => true, "source" => "lab_result" }
+    end
+  end
 
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
-  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status focus_surface_present]
+  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status focus_surface_present stdout_empty stderr_contains stdout_contains stdout_keys_include]
   expected.each do |key, expectation|
     next if ignored.include?(key)
     next if key.start_with?("requirement_")
@@ -353,6 +399,17 @@ if options[:self_test]
   ar_scenario = base.merge("expected" => { "analyzer" => "rspec", "analyzer_status" => "succeeded" })
   check_self.call("analyzer-missing", !evaluate(ar_scenario, passing, 2)["all_matched"])
   check_self.call("analyzer-present", evaluate(ar_scenario, passing.merge("analyzer_results" => [{ "analyzer" => "rspec", "execution_status" => "succeeded" }]), 2)["all_matched"])
+  facts = passing.merge("lab_stdout_empty" => false, "lab_stdout_excerpt" => "Gate: PASS\n",
+                        "lab_stderr_excerpt" => "railverdict: invalid --format \"sarif\"; expected console, json\n",
+                        "lab_stdout_keys" => %w[manifests lab_stdout_empty])
+  proc_scenario = base.merge("expected" => { "stdout_empty" => false, "stdout_contains" => "Gate: PASS",
+                                             "stderr_contains" => "invalid --format",
+                                             "stdout_keys_include" => %w[manifests] })
+  check_self.call("process-facts", evaluate(proc_scenario, facts, 2)["all_matched"])
+  check_self.call("process-facts-negative", !evaluate(proc_scenario, passing, 2)["all_matched"])
+  check_self.call("stderr-mismatch", !evaluate(base.merge("expected" => { "stderr_contains" => "nope-absent" }), facts, 2)["all_matched"])
+  unknown_gate = base.merge("expected_gate" => "UNKNOWN", "expected_completion" => "UNKNOWN", "expected_exit" => 2)
+  check_self.call("unknown-gate-token", evaluate(unknown_gate, {}, 2)["all_matched"])
   if failures.empty?
     $stderr.puts "oracle self-test: PASS (#{LAB_ORACLE_VERSION})"
     puts "oracle self-test: PASS"

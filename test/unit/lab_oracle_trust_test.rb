@@ -138,6 +138,33 @@ class LabOracleTrustTest < Minitest::Test
     assert_equal false, check.fetch("evaluated")
   end
 
+  # Process-fact assertions: usage-error paths carry no gate; the oracle
+  # judges exit plus lab-observed stdout/stderr facts instead.
+  def test_sarif_rejection_shape_passes
+    payload = { "lab_stdout_empty" => true,
+                "lab_stderr_excerpt" => "railverdict: invalid --format \"sarif\"; expected console, json" }
+    stdout, _stderr, status = run_oracle("DEEP-CLI-SARIF-01", payload, 2)
+    assert status.success?, stdout
+    observation = JSON.parse(stdout)
+    assert_equal [], observation.fetch("unconsumed_assertions")
+  end
+
+  def test_sarif_rejection_with_console_output_fails
+    payload = { "lab_stdout_empty" => false, "lab_stdout_excerpt" => "RailVerdict doctor",
+                "lab_stderr_excerpt" => "" }
+    _stdout, _stderr, status = run_oracle("DEEP-CLI-SARIF-01", payload, 2)
+    assert_equal 1, status.exitstatus
+  end
+
+  def test_stdout_keys_include_distinguishes_shape
+    payload = { "lab_stdout_empty" => false, "lab_stdout_keys" => %w[version runs] }
+    stdout, _stderr, status = run_oracle("DEEP-CLI-SARIF-06", payload, 0)
+    assert status.success?, stdout
+    payload2 = { "lab_stdout_empty" => false, "lab_stdout_keys" => %w[gate findings] }
+    _stdout, _stderr, status2 = run_oracle("DEEP-CLI-SARIF-06", payload2, 0)
+    assert_equal 1, status2.exitstatus
+  end
+
   # LAB-06: selecting nothing refuses to certify.
   def test_empty_selection_exits_blocked
     _stdout, stderr, status = Open3.capture3("ruby", File.join(@root, "scripts", "lab_run"), "--scenario", "NOPE-00")
