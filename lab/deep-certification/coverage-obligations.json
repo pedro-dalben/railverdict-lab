@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 222,
+    "count": 226,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -330,13 +330,12 @@
       "capability": "mcp",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "",
+      "limitation": "handshake, list, errors, bounds",
       "obligation_id": "O-MCP-PROTOCOL",
       "positive": true,
       "public_contract": "initialize/tools-list/ping are protocol ops; stdio JSON-RPC 2.0 2025-11-25; stdout reserved; unknown method/tool errors",
       "scenario_ids": [
-        "mcp_protocol x1",
-        "mcp category"
+        "RVLAB-MCP-PROTOCOL-01 (16 tools)"
       ],
       "source_ref": "lib/rail_verdict/mcp/server.rb",
       "status": "covered"
@@ -437,48 +436,43 @@
       "capability": "mcp",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "single POL scenario mentions the tool; needs DEEP parity in D10",
+      "limitation": "decision + digest equality",
       "obligation_id": "O-MCP-POLICY",
       "positive": true,
       "public_contract": "get_engineering_policy returns same readiness as CLI policy",
       "scenario_ids": [
-        "RVLAB-POL-12",
-        "mcp_policy x1",
-        "policy_drift x1",
-        "policy_determinism x1"
+        "DEEP-MCP-PAR-01"
       ],
       "source_ref": "lib/rail_verdict/mcp/tools/get_engineering_policy.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "mcp",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "CLI paths covered; MCP tool paths need explicit parity scenarios in D10",
+      "limitation": "packet_id equality",
       "obligation_id": "O-MCP-REVIEW",
       "positive": true,
       "public_contract": "get_review_packet/verify_review_observation/create_workflow_receipt parity with review CLI",
       "scenario_ids": [
-        "RVLAB-WF-10",
-        "mcp_review x1"
+        "DEEP-MCP-PAR-01"
       ],
       "source_ref": "lib/rail_verdict/mcp/tools/get_review_packet.rb, verify_review_observation.rb, create_workflow_receipt.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "mcp",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "long sessions and cache isolation across projects exercised lightly; D10 matrix",
+      "limitation": "independent sessions + isolation",
       "obligation_id": "O-MCP-SESSION",
       "positive": true,
       "public_contract": "session reuse, repeated calls, no cross-project cache contamination",
       "scenario_ids": [
-        "mcp category",
-        "determinism x2"
+        "DEEP-MCP-SES-01"
       ],
       "source_ref": "lib/rail_verdict/mcp/cache.rb, server.rb mutex",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "engineering_policy",

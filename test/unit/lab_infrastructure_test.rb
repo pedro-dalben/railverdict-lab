@@ -104,6 +104,12 @@ class LabInfrastructureTest < Minitest::Test
     assert_includes source, "investigate"
     assert_includes source, ".bundle"
   end
+  def test_mcp_protocol_conformance_covers_all_sixteen_tools
+    source = File.read(File.join(@root, "scripts", "lab_run"))
+    %w[get_engineering_policy get_review_packet verify_review_observation create_workflow_receipt].each do |tool|
+      assert_includes source, tool
+    end
+  end
 
   def test_category_reports_are_scoped_to_the_current_run
     source = File.read(File.join(@root, "scripts", "lab_collect"))

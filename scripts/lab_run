@@ -517,6 +517,75 @@ def policy_migration_flow(candidate, work_dir, artifact_dir)
   merged["lab_stdout_keys"] = merged.keys
   merged
 end
+def mcp_parity_flow(candidate, work_dir, artifact_dir)
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  base = base.strip
+  pol_out, _, pol_status = LabSupport.product_run(candidate, ["policy", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli policy failed" unless pol_status.exitstatus == 0
+  pol_doc = LabSupport.json_strict(pol_out)
+  show_out, _, show_status = LabSupport.product_run(candidate, ["review", "show", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli review show failed" unless show_status.exitstatus == 0
+  show_doc = LabSupport.json_strict(show_out)
+  check_out, _, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli check failed" unless [0, 1].include?(check_status.exitstatus)
+  check_doc = LabSupport.json_strict(check_out)
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25",
+                   "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    tool_verify = client.tool("verify", "changed" => true, "base" => base)
+    tool_findings = client.tool("list_findings", {})
+    tool_policy = client.tool("get_engineering_policy", {})
+    tool_packet = client.tool("get_review_packet", {})
+  ensure
+    client.close
+  end
+  File.write(result_path(artifact_dir, "parity-tool-policy.json"), JSON.pretty_generate(tool_policy))
+  File.write(result_path(artifact_dir, "parity-tool-packet.json"), JSON.pretty_generate(tool_packet))
+  policy_parity = tool_policy["mcp_is_error"] == false &&
+    tool_policy.dig("engineering_policy", "decision") == pol_doc["decision"] &&
+    tool_policy.dig("engineering_policy", "policy_digest") == pol_doc["policy_digest"]
+  packet_parity = tool_packet["mcp_is_error"] == false &&
+    tool_packet.dig("review_packet", "packet_id") == show_doc["packet_id"]
+  verify_parity = tool_verify["mcp_is_error"] == false &&
+    tool_verify["gate"] == check_doc["gate"] &&
+    tool_findings["mcp_is_error"] == false &&
+    tool_findings["total"] == Array(check_doc["findings"]).length
+  flags = { "policy_parity" => policy_parity, "packet_parity" => packet_parity, "verify_parity" => verify_parity }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def mcp_session_flow(candidate, work_dir, artifact_dir)
+  sibling = "#{work_dir}-sibling"
+  FileUtils.rm_rf(sibling)
+  _out, err, status = LabSupport.run(["git", "clone", "--quiet", work_dir, sibling], cwd: work_dir)
+  raise "session sibling clone failed: #{err}" unless status.success?
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  clients = {}
+  results = {}
+  begin
+    [["a", work_dir], ["b", sibling]].each do |label, dir|
+      clients[label] = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: dir)
+      clients[label].request("initialize", "protocolVersion" => "2025-11-25",
+                             "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+      results[label] = clients[label].tool("verify", "changed" => true, "base" => base.strip)
+    end
+    raise "session setup verify failed" unless results.values.all? { |r| r["mcp_is_error"] == false }
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# session isolation touch\n")
+    receipt_b = clients["b"].tool("get_verification_receipt", {})
+  ensure
+    clients.each_value(&:close)
+    FileUtils.rm_rf(sibling)
+  end
+  flags = {
+    "sessions_independent" => results["a"]["gate"] == results["b"]["gate"],
+    "sibling_unaffected" => receipt_b["status"] == "fresh"
+  }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
 def mcp_projection_flow(candidate, work_dir, artifact_dir)
   LabSupport.install_fake_bundle(work_dir, { "behavior" => "record_reuse", "analyzer" => "all" })
   fake_bin = File.join(work_dir, "tmp", "fake-bin")
@@ -843,7 +912,7 @@ def mcp_protocol(candidate, work_dir, mode)
     init_ok = init.dig("result", "serverInfo").is_a?(Hash) && init.dig("result", "protocolVersion").to_s == "2025-11-25"
     tools = client.request("tools/list")
     tool_names = Array(tools.dig("result", "tools")).map { |tool| tool["name"] }
-    expected_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate get_verification_receipt get_pr_intelligence create_handoff inspect_handoff verify_handoff]
+    expected_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate get_verification_receipt get_pr_intelligence get_engineering_policy get_review_packet verify_review_observation create_workflow_receipt create_handoff inspect_handoff verify_handoff]
     tools_present = (expected_tools - tool_names).empty?
     unknown = client.request("tools/bogus_method_xyz")
     unknown_error = unknown.key?("error") || (unknown.dig("result", "isError") == true)
@@ -1342,6 +1411,10 @@ selected.each do |scenario|
                   policy_migration_flow(candidate, work_dir, artifact_dir)
                 when "repair_trio"
                   repair_trio_flow(candidate, work_dir, artifact_dir)
+                when "mcp_parity"
+                  mcp_parity_flow(candidate, work_dir, artifact_dir)
+                when "mcp_session"
+                  mcp_session_flow(candidate, work_dir, artifact_dir)
                 when "mcp_projection"
                   mcp_projection_flow(candidate, work_dir, artifact_dir)
                 when "mcp_review"

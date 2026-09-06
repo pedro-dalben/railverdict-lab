@@ -7025,3 +7025,78 @@ scenarios:
   tags:
   - review
   - workflow
+- id: DEEP-MCP-PAR-01
+  title: CLI and MCP project the same policy packet and verification
+  category: mcp
+  description: On one green state, CLI policy/review/check and their MCP tools return identical decisions, digests, packet ids, gates, and finding counts.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-parity
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: parity base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+      message: parity fixture
+  command:
+    interface: mcp_parity
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    policy_parity: true
+    packet_parity: true
+    verify_parity: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - parity
+- id: DEEP-MCP-SES-01
+  title: sibling project sessions stay isolated from each other
+  category: mcp
+  description: Two MCP sessions over equivalent clones verify independently, and mutating one project leaves the sibling receipt fresh.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-session
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: session fixture
+  command:
+    interface: mcp_session
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    sessions_independent: true
+    sibling_unaffected: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - session
