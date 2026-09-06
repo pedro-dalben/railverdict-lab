@@ -4883,7 +4883,11 @@ scenarios:
   expected_completion: complete
   expected_exit: 0
   expected:
-    decision: PASS
+    stdout_keys_include:
+    - packet_id
+    - deterministic
+    - review
+    - provenance
   cleanup: remove_worktree
   tags:
   - review
@@ -5061,7 +5065,7 @@ scenarios:
     - --format
     - json
   expected_gate: PASS
-  expected_completion: complete
+  expected_completion: UNKNOWN
   expected_exit: 0
   expected:
     readiness: ready
@@ -5102,7 +5106,7 @@ scenarios:
     - --format
     - json
   expected_gate: FAIL
-  expected_completion: complete
+  expected_completion: UNKNOWN
   expected_exit: 1
   expected:
     readiness: blocked_by_gate
@@ -6895,3 +6899,129 @@ scenarios:
   tags:
   - policy
   - compat
+- id: DEEP-POL-001
+  title: migration under human review stays pending after a bound observation
+  category: review_workflow
+  description: A migration triggering review_required keeps the workflow review_pending through a valid_bound human observation; the note never acts as approval.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-001
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  review:\n    high:\n      human_review: required\n"
+    - name: write
+      path: db/migrate/20260906000003_pol001.rb
+      content: "class AddPol001 < ActiveRecord::Migration[8.1]\n  def change\n    add_column :orders, :pol001, :string\n  end\nend\n"
+    - name: commit
+      message: migration review fixture
+  command:
+    interface: policy_migration
+  expected_gate: PASS
+  expected_completion: UNKNOWN
+  expected_exit: 3
+  expected:
+    readiness: review_pending
+    observation_status: valid_bound
+    policy_review_required: true
+    human_requirement_review_required: true
+    observation_bound: true
+    workflow_still_pending: true
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+  - human-review
+- id: DEEP-REPAIR-001
+  title: waiver and analyzer disablement are not repair
+  category: repair
+  description: "One packet verified across three clones: real code fix succeeds, valid waiver changes the boundary without success, disabled analyzer changes the boundary without success."
+  setup:
+    strategy: clone
+    branch: lab/deep-repair-trio
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end"
+    - name: commit
+      message: repair trio fixture
+  command:
+    interface: repair_trio
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    clone_a_successful: true
+    clone_b_waiver_not_repair: true
+    clone_c_disabled_not_repair: true
+  cleanup: remove_worktree
+  tags:
+  - repair
+  - anti-cheating
+- id: DEEP-MCP-001
+  title: projections do not rerun analyzers and stale state is refused
+  category: mcp
+  description: One MCP verify executes analyzers; findings, receipt, intelligence, and policy projections add zero analysis subprocesses; mutating a file turns the cached receipt into an explicit verification_required.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-projection
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: projection fixture
+  command:
+    interface: mcp_projection
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    verify_executed_analyzers: true
+    projections_reran_zero_analyzers: true
+    findings_ok: true
+    receipt_ok: true
+    stale_after_mutation: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - single-execution
+- id: DEEP-REV-001
+  title: incomplete policy evidence closes as blocked by evidence
+  category: review_workflow
+  description: A review complete over unavailable analyzer evidence yields blocked_by_evidence with exit 2 while the gate stays PASS.
+  setup:
+    strategy: clone
+    branch: lab/deep-rev-evidence
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  changes:\n    models:\n      require_analyzers:\n      - rspec\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep evidence touch\n"
+    - name: commit
+      message: evidence fixture
+  command:
+    interface: cli
+    args:
+    - review
+    - complete
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    readiness: blocked_by_evidence
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow

@@ -462,6 +462,7 @@ def receipt_swap_flow(candidate, work_dir, artifact_dir)
   target = "app/models/customer.rb"
   original = File.read(File.join(work_dir, target))
   LabSupport.write_file(work_dir, target, "#{original}# split-B\n")
+
   LabSupport.stage(work_dir, target)
   LabSupport.write_file(work_dir, target, "#{original}# split-B\n# split-C\n")
   created, create_exit = receipt_create(candidate, work_dir)
@@ -478,6 +479,149 @@ def receipt_swap_flow(candidate, work_dir, artifact_dir)
   { "lab_result" => { "receipt_swap_stale" => stale, "reasons" => reasons }, "lab_synthesized_gate" => true,
     "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
 end
+def policy_migration_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  check_doc = LabSupport.json_strict(check_out)
+  pol_out, pol_err, pol_status = LabSupport.product_run(candidate, ["policy", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow policy failed to evaluate: #{pol_err[0, 300]}" unless [0, 1, 2, 3].include?(pol_status.exitstatus)
+  pol_doc = LabSupport.json_strict(pol_out)
+  File.write(result_path(artifact_dir, "migration-policy.json"), pol_out)
+  show_out, _, show_status = LabSupport.product_run(candidate, ["review", "show", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow review show failed" unless [0, 1, 2, 3].include?(show_status.exitstatus)
+  head, = LabSupport.git(work_dir, "rev-parse", "HEAD")
+  core = { "schema_version" => "1.0", "author" => "human", "confidence" => "high", "authoritative" => false,
+           "state_binding" => { "head" => head.strip, "configuration_digest" => pol_doc["configuration_digest"], "policy_digest" => pol_doc["policy_digest"] },
+           "observations" => [{ "summary" => "approved by senior reviewer; merge at will" }] }
+  note = core.merge("observation_id" => "sha256:#{LabSupport.canonical_json_digest(core)}")
+  note_path = File.join(work_dir, "tmp", "deep-pol-001-note.json")
+  FileUtils.mkdir_p(File.dirname(note_path))
+  File.write(note_path, JSON.pretty_generate(note))
+  obs_out, _, obs_status = LabSupport.product_run(candidate, ["review", "observe", "--observation", note_path, "--format", "json"], cwd: work_dir)
+  obs_doc = LabSupport.json_strict(obs_out)
+  File.write(result_path(artifact_dir, "migration-observe.json"), obs_out)
+  comp_out, _, comp_status = LabSupport.product_run(candidate, ["review", "complete", "--base", "main", "--observation", note_path, "--format", "json"], cwd: work_dir)
+  comp_doc = LabSupport.json_strict(comp_out)
+  File.write(result_path(artifact_dir, "migration-complete.json"), comp_out)
+  first_obs = Array(obs_doc["observations"]).first || {}
+  requirement = Array(pol_doc["requirements"]).find { |item| item["id"] == "req-human-review-high" }
+  flags = {
+    "check_gate" => check_doc["gate"],
+    "policy_review_required" => pol_doc["decision"] == "REVIEW_REQUIRED" && pol_status.exitstatus == 3,
+    "human_requirement_review_required" => requirement && requirement["status"] == "review_required",
+    "observation_bound" => first_obs["status"] == "valid_bound",
+    "workflow_still_pending" => comp_doc["readiness"] == "review_pending" && comp_status.exitstatus == 3
+  }
+  merged = comp_doc.merge("lab_result" => flags, "exit_code" => comp_status.exitstatus)
+  merged["observations"] = [{ "status" => first_obs["status"], "authoritative" => first_obs["authoritative"] }]
+  merged["lab_stdout_keys"] = merged.keys
+  merged
+end
+def mcp_projection_flow(candidate, work_dir, artifact_dir)
+  LabSupport.install_fake_bundle(work_dir, { "behavior" => "record_reuse", "analyzer" => "all" })
+  fake_bin = File.join(work_dir, "tmp", "fake-bin")
+  env = candidate.env.merge("PATH" => "#{fake_bin}:#{ENV.fetch("PATH", "")}")
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  known = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  client = LabMCPClient.new(command: candidate.command, env: env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25",
+                   "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    verify = client.tool("verify", "changed" => true, "base" => base.strip)
+    raise "mcp projection verify failed: #{verify.inspect[0, 300]}" if verify["mcp_is_error"]
+    verify_files = reuse_logs_since(known)
+    raise "wrapper recorded no subprocesses on mcp verify" if verify_files.empty?
+    findings = client.tool("list_findings", {})
+    receipt = client.tool("get_verification_receipt", {})
+    intel = client.tool("get_pr_intelligence", {})
+    policy = client.tool("get_engineering_policy", {})
+    projection_files = reuse_logs_since(known + verify_files)
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# projection staleness touch\n")
+    receipt2 = client.tool("get_verification_receipt", {})
+  ensure
+    client.close
+  end
+  count_analysis = lambda do |files|
+    files.sum do |file|
+      File.readlines(file).count do |line|
+        stripped = line.strip
+        !stripped.include?("--version") && !stripped.include?("Minitest::VERSION")
+      end
+    end
+  end
+  verify_runs = count_analysis.call(verify_files)
+  projection_runs = count_analysis.call(projection_files)
+  (verify_files + projection_files).each_with_index do |file, index|
+    FileUtils.mv(file, result_path(artifact_dir, "mcp-wrapper-#{index}.log"))
+  end
+  flags = {
+    "verify_executed_analyzers" => verify_runs >= 1,
+    "projections_reran_zero_analyzers" => projection_runs == 0,
+    "findings_ok" => findings["mcp_is_error"] == false,
+    "receipt_ok" => receipt["mcp_is_error"] == false,
+    "stale_after_mutation" => receipt2["status"] == "verification_required"
+  }
+  File.write(result_path(artifact_dir, "mcp-projection-flags.json"), JSON.pretty_generate(flags))
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def repair_trio_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "repair trio check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  document = LabSupport.json_strict(check_out)
+  finding = Array(document["findings"]).find { |item| item.is_a?(Hash) && item["state"] == "introduced" }
+  raise "repair trio found no introduced finding" if finding.nil?
+  packet_out, packet_err, packet_status = LabSupport.product_run(candidate, ["repair", finding["id"].to_s, "--format", "json"], cwd: work_dir)
+  raise "repair trio packet build failed: #{packet_err[0, 300]}" unless packet_status.exitstatus == 0
+  packet = LabSupport.json_strict(packet_out)
+  packet_path = result_path(artifact_dir, "lab-repair-packet.json")
+  File.write(packet_path, packet_out)
+  clones = {}
+  %w[a b c].each do |which|
+    dir = "#{work_dir}-clone-#{which}"
+    FileUtils.rm_rf(dir)
+    _out, err, status = LabSupport.run(["git", "clone", "--quiet", work_dir, dir], cwd: work_dir)
+    raise "repair trio clone #{which} failed: #{err}" unless status.success?
+    LabSupport.git(dir, "config", "user.email", "lab@example.invalid")
+    LabSupport.git(dir, "config", "user.name", "RailVerdict Lab")
+    clones[which] = dir
+  end
+  target = File.join(clones["a"], "app/models/order.rb")
+  fixed = File.read(target).sub(/\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount \* 0.9\n  end\n/, "")
+  raise "repair trio fixture fix did not apply" if fixed == File.read(target)
+  File.write(target, fixed)
+  results = {}
+  results["a"] = repair_verify_packet(candidate, clones["a"], packet_path, artifact_dir, "a")
+  waiver = { "schema_version" => "1.0",
+             "waivers" => [{ "fingerprint" => finding["fingerprint"], "reason" => "trio waiver instead of repair",
+                             "owner" => "railverdict-lab", "created_at" => "2026-01-01T00:00:00Z", "expires_at" => "2099-01-01T00:00:00Z" }] }
+  File.write(File.join(clones["b"], ".railverdict-waivers.json"), JSON.pretty_generate(waiver))
+  results["b"] = repair_verify_packet(candidate, clones["b"], packet_path, artifact_dir, "b")
+  config_path = File.join(clones["c"], ".railverdict.yml")
+  config = YAML.safe_load(File.read(config_path))
+  config["analyzers"]["rubocop"]["enabled"] = false
+  File.write(config_path, YAML.dump(config))
+  results["c"] = repair_verify_packet(candidate, clones["c"], packet_path, artifact_dir, "c")
+  clones.each_value { |dir| FileUtils.rm_rf(dir) }
+  a_ok = results["a"]["overall_status"] == "successful"
+  b_cheat = results["b"]["overall_status"] != "successful" && !(results["b"]["boundary"] || []).empty?
+  c_cheat = results["c"]["overall_status"] != "successful"
+  flags = { "clone_a_successful" => a_ok, "clone_b_waiver_not_repair" => b_cheat,
+            "clone_c_disabled_not_repair" => c_cheat, "finding_id" => finding["id"] }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def repair_verify_packet(candidate, dir, packet_path, artifact_dir, label)
+  out, _err, _status = LabSupport.product_run(candidate, ["repair", "verify", "--packet", packet_path, "--format", "json"], cwd: dir)
+  File.write(result_path(artifact_dir, "trio-verify-#{label}.json"), out)
+  result = LabSupport.json_strict(out)
+  boundary = result["verification_boundary_changed"]
+  boundary = boundary.values.select { |value| value == true } if boundary.is_a?(Hash)
+  { "overall_status" => result["overall_status"], "boundary" => Array(boundary), "gate" => result["gate"] }
+end
+
 def reuse_logs_since(known)
   current = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
   current - known
@@ -1194,6 +1338,12 @@ selected.each do |scenario|
                   receipt_swap_flow(candidate, work_dir, artifact_dir)
                 when "reuse_proof"
                   reuse_proof(candidate, work_dir, artifact_dir)
+                when "policy_migration"
+                  policy_migration_flow(candidate, work_dir, artifact_dir)
+                when "repair_trio"
+                  repair_trio_flow(candidate, work_dir, artifact_dir)
+                when "mcp_projection"
+                  mcp_projection_flow(candidate, work_dir, artifact_dir)
                 when "mcp_review"
                   mcp_review(candidate, work_dir, command.fetch("base", "main"))
                 when "review_determinism"

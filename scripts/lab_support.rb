@@ -110,6 +110,10 @@ module LabSupport
     _stdout, stderr, status = git(work_dir, "add", "--", *Array(paths))
     raise "fixture stage failed: #{stderr}" unless status.success?
   end
+  def canonical_json_digest(core)
+    require "digest"
+    Digest::SHA256.hexdigest(JSON.generate(canonical(core)))
+  end
   def acquire_scenario_lock(root, id)
     lock_dir = File.join(root, "artifacts", "#{id}.lock")
     FileUtils.mkdir_p(File.dirname(lock_dir))

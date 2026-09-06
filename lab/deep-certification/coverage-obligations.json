@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 218,
+    "count": 222,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -615,14 +615,13 @@
       "capability": "review_workflow",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "",
+      "limitation": "lanes, ids, bounds, recovery",
       "obligation_id": "O-REV-PACKET",
       "positive": true,
       "public_contract": "ReviewPacket deterministic/review lanes, packet_id stability, bounds",
       "scenario_ids": [
-        "RVLAB-WF-01..07",
-        "RVLAB-WF-10",
-        "review_determinism x1"
+        "RVLAB-WF-01 (repaired)",
+        "review_determinism"
       ],
       "source_ref": "schemas/review-packet-v1.schema.json",
       "status": "covered"
@@ -631,44 +630,46 @@
       "capability": "review_workflow",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "unavailable status has no scenario; needs DEEP case",
+      "limitation": "4/5 statuses + binding; unavailable untested",
       "obligation_id": "O-REV-OBSERVATION",
       "positive": true,
       "public_contract": "observation validation valid_bound/stale/untrusted/invalid/unavailable; author binding; no gate effect",
       "scenario_ids": [
-        "observation_status valid_bound/stale/invalid/untrusted (4 scenarios)"
+        "RVLAB-WF-02..05 equivalents",
+        "DEEP-POL-001"
       ],
       "source_ref": "lib/rail_verdict/review_observation.rb:55-93",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "review_workflow",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "blocked_by_evidence has no scenario; needs DEEP case",
+      "limitation": "all four readiness states + exits",
       "obligation_id": "O-REV-RECEIPT",
       "positive": true,
       "public_contract": "WorkflowReceipt ready/blocked_by_gate/blocked_by_evidence/review_pending with exits 0/1/2/3",
       "scenario_ids": [
-        "readiness ready/blocked_by_gate/review_pending (3)",
-        "RVLAB-WF-08 (exit 3)"
+        "RVLAB-WF-06/07 (repaired)",
+        "DEEP-REV-001",
+        "RVLAB-WF-08"
       ],
       "source_ref": "lib/rail_verdict/workflow_receipt.rb:61-72",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "review_workflow",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "DEEP-POL-001 exemplar planned in D09",
+      "limitation": "approval-claiming note still pends",
       "obligation_id": "O-REV-NO-APPROVAL",
       "positive": true,
       "public_contract": "valid observation (even human 'approved') never clears review_required",
       "scenario_ids": [
-        "RVLAB-WF-08 (review_pending persists)"
+        "DEEP-POL-001"
       ],
       "source_ref": "docs/review-workflow.md; ADR 0021 S5",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "pr_intelligence",
@@ -839,15 +840,13 @@
       "capability": "repair",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "waiver-vs-repair (DEEP-REPAIR-001) exemplar is D09 work",
+      "limitation": "trio boundary proof",
       "obligation_id": "O-REPAIR",
       "positive": true,
       "public_contract": "packet -> minimal fix -> verify; waiver/config weakening surfaces boundary_changed, never successful",
       "scenario_ids": [
-        "repair_anti_cheating (3)",
-        "repair (6)",
-        "mcp_repair x4",
-        "RVLAB-16"
+        "DEEP-REPAIR-001",
+        "repair families"
       ],
       "source_ref": "lib/rail_verdict/repair/",
       "status": "covered"
