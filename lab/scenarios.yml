@@ -5253,3 +5253,43 @@ scenarios:
   tags:
   - review
   - workflow
+- id: RVLAB-WF-12
+  title: Unmapped changed files get a focus pointer
+  category: review_workflow
+  description: A change touching only unsurfaced paths (lib/) yields an unmapped Review Focus entry instead of silence.
+  setup:
+    strategy: clone
+    branch: lab/wf-12-unmapped
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+    - name: write
+      path: lib/lab_tool.rb
+      content: "module LabTool\n  def self.run\n    1\n  end\nend\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_surface_present: unmapped
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow

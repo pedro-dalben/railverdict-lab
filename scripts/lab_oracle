@@ -132,6 +132,13 @@ def evaluate(scenario, actual, exit_code)
     checks << { "name" => "observation_status", "expected" => expected["observation_status"], "actual" => actual_value, "matched" => actual_value == expected["observation_status"] }
   end
 
+  if expected.key?("focus_surface_present")
+    focus = Array(product["review_focus"]) + Array(product.dig("review", "focus"))
+    surfaces = focus.map { |item| item["surface"] }
+    matched = surfaces.include?(expected["focus_surface_present"])
+    checks << { "name" => "focus_surface_present", "expected" => expected["focus_surface_present"], "actual" => surfaces, "matched" => matched }
+  end
+
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
   ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status]
   expected.each do |key, expectation|
