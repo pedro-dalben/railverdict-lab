@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 197,
+    "count": 207,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -670,12 +670,12 @@
       "capability": "pr_intelligence",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "10 scenarios for 19 surfaces; per-surface positive+near-miss+mixed matrix needs DEEP expansion in D07",
+      "limitation": "6/18 surfaces with tiers; remaining 12 carried",
       "obligation_id": "O-CI-SURFACES",
       "positive": true,
       "public_contract": "19 Rails change surfaces with detected/inferred/mixed evidence tiers",
       "scenario_ids": [
-        "RVLAB-CI-01..10"
+        "DEEP-CI-SURF-01..04"
       ],
       "source_ref": "lib/rail_verdict/change_intelligence.rb",
       "status": "partial"
@@ -684,44 +684,45 @@
       "capability": "pr_intelligence",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "risk-level reachability and override precedence need DEEP truth tables",
+      "limitation": "override, area, invalid-name leniency",
       "obligation_id": "O-CI-RISK",
       "positive": true,
       "public_contract": "LOW/MEDIUM/HIGH/CRITICAL with reason codes; sensitive areas; overrides; unknown stays unknown",
       "scenario_ids": [
-        "RVLAB-CI series",
-        "ci-01..10 fixture branches"
+        "DEEP-CI-RISK-01..03"
       ],
       "source_ref": "docs/engineering-policy.md Rules; config 1.6 review.*",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "pr_intelligence",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "single unmapped case; 9/10/11-path bounds and mixed mapped/unmapped need DEEP scenarios (1.8.2 regression)",
+      "limitation": "9/10/10 cap, position, no inflation",
       "obligation_id": "O-CI-UNMAPPED",
       "positive": true,
       "public_contract": "unsurfaced paths yield one bounded unmapped entry (<=10 paths, ranked last, no risk inflation)",
       "scenario_ids": [
-        "RVLAB-WF-12 (focus_surface_present: unmapped)"
+        "DEEP-CI-UNMAP-09/10/11/MIX",
+        "RVLAB-WF-12"
       ],
       "source_ref": "CHANGELOG 1.8.2; lib/rail_verdict/change_intelligence.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "pr_intelligence",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "ranking recall corpus is D07 work, not catalog coverage",
+      "limitation": "ranking/dedup/bounds; focus is deduped subset (explicit)",
       "obligation_id": "O-CI-FOCUS",
       "positive": true,
       "public_contract": "Review Focus ranking, ties, bounds, dedup, no hallucinated paths",
       "scenario_ids": [
-        "RVLAB-CI series (focus_surface_present x1)"
+        "DEEP-CI-SURF-01/02",
+        "recall corpus"
       ],
       "source_ref": "lib/rail_verdict/pr_intelligence.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "analyzers",

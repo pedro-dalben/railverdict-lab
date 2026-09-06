@@ -5958,3 +5958,514 @@ scenarios:
   tags:
   - test-selection
   - evidence-reuse
+- id: DEEP-CI-SURF-01
+  title: policy and migration changes report detected surfaces and high risk
+  category: pr_intelligence
+  description: A policy file plus a migration yields detected authorization/migration surfaces, models untouched, HIGH risk, and a two-entry focus led by authorization.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-surf
+    operations:
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: write
+      path: db/migrate/20260906000001_add_deep_ci_surf.rb
+      content: "class AddDeepCiSurf < ActiveRecord::Migration[8.1]\n  def change\n    add_column :orders, :deep_ci_surf, :string\n  end\nend\n"
+    - name: commit
+      message: surfaces fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    surface_authorization_detection: detected
+    surface_migration_changed: true
+    surface_migration_detection: detected
+    surface_models_changed: false
+    risk_level: HIGH
+    focus_entry_count: 2
+    focus_first_surface: authorization
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-SURF-02
+  title: session-like lib file is an authentication near-miss with an unmapped pointer
+  category: pr_intelligence
+  description: lib/session_report.rb matches no authentication convention and no surface; authentication stays unchanged while focus carries one trailing unmapped entry.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-nearmiss
+    operations:
+    - name: write
+      path: lib/session_report.rb
+      content: "# unsurfaced session-like helper\n"
+    - name: commit
+      message: nearmiss fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authentication_changed: false
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-SURF-03
+  title: secret-adjacent initializer reports a mixed security surface at critical risk
+  category: pr_intelligence
+  description: A synthetic secret-named initializer (no secret content) triggers the mixed security surface and CRITICAL review risk with evidence.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-security
+    operations:
+    - name: write
+      path: config/initializers/secret_lab_rotate.rb
+      content: "# synthetic secret-adjacent initializer for surface detection\nRails.application.config.x.secret_lab = true\n"
+    - name: commit
+      message: security fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_security_changed: true
+    surface_security_detection: mixed
+    risk_level: CRITICAL
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-RISK-01
+  title: per-surface risk override lowers the verdict level
+  category: pr_intelligence
+  description: review.risk authorization medium on a 1.6 config caps the verdict at MEDIUM and marks the risk configured.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-override
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  risk:\n    authorization: medium\n"
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: commit
+      message: risk override fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    risk_level: MEDIUM
+    risk_configured: true
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-RISK-02
+  title: named sensitive area fires its own signal and reason
+  category: pr_intelligence
+  description: A financial glob area containing the touched model reports changed with evidence and joins the HIGH risk reasons.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-area
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  sensitive_paths:\n    financial:\n      - app/models/order.rb\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep area touch\n"
+    - name: commit
+      message: risk area fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    sensitive_area_present: financial
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-RISK-03
+  title: unknown risk surface name is ignored without breaking the verdict
+  category: pr_intelligence
+  description: "An override naming a surface that does not exist changes nothing: the verdict still applies authorization defaults and exits 0. Documents lenient behavior."
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-invalid
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  risk:\n    nonexistent_surface: high\n"
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: commit
+      message: risk invalid fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-UNMAP-09
+  title: 9 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (9 files) yields one trailing
+    unmapped Review Focus entry with 9 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-09
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: commit
+      message: unmapped fixture 9
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 9
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-10
+  title: 10 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (10 files) yields one
+    trailing unmapped Review Focus entry with 10 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-10
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: commit
+      message: unmapped fixture 10
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-11
+  title: 11 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (11 files) yields one
+    trailing unmapped Review Focus entry with 10 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-11
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: write
+      path: lib/unmapped11.rb
+      content: "# unsurfaced helper 11\n"
+    - name: commit
+      message: unmapped fixture 11
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-MIX
+  title: mapped change outranks the capped unmapped pointer
+  category: pr_intelligence
+  description: A policy change plus 12 unsurfaced files yields authorization first
+    and one trailing unmapped entry capped at 10 paths.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-mix
+    operations:
+    - name: write
+      path: app/policies/order_policy.rb
+      content: |
+        class OrderPolicy
+          def self.can_view?(user)
+            user.admin?
+          end
+        end
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: write
+      path: lib/unmapped11.rb
+      content: "# unsurfaced helper 11\n"
+    - name: write
+      path: lib/unmapped12.rb
+      content: "# unsurfaced helper 12\n"
+    - name: commit
+      message: unmapped fixture 12
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    focus_entry_count: 2
+    focus_first_surface: authorization
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-SURF-04
+  title: dependency manifest change reports the dependencies surface
+  category: pr_intelligence
+  description: A comment-only Gemfile touch marks the dependencies surface changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-dependencies
+    operations:
+    - name: append
+      path: Gemfile
+      content: "\n# deep-ci dependency note\n"
+    - name: commit
+      message: dependencies fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_dependencies_changed: true
+    risk_level: MEDIUM
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces

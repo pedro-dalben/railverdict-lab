@@ -311,11 +311,103 @@ def evaluate(scenario, actual, exit_code)
     end
   end
 
+  if expected.key?("risk_level")
+    risk = product["review_risk"]
+    if !risk.is_a?(Hash)
+      missing.call("risk_level", expected["risk_level"], "missing_review_risk")
+    else
+      record.call("risk_level", expected["risk_level"], risk["level"], "product")
+    end
+  end
+
+  if expected.key?("risk_configured")
+    risk = product["review_risk"]
+    if !risk.is_a?(Hash)
+      missing.call("risk_configured", expected["risk_configured"], "missing_review_risk")
+    else
+      record.call("risk_configured", expected["risk_configured"], risk["configured"], "product")
+    end
+  end
+
+  if expected.key?("focus_entry_count")
+    if !product.key?("review_focus")
+      missing.call("focus_entry_count", expected["focus_entry_count"], "missing_review_focus")
+    else
+      focus = Array(product["review_focus"])
+      expectation = expected["focus_entry_count"]
+      matched = expectation.is_a?(Numeric) && focus.length == expectation
+      checks << { "name" => "focus_entry_count", "expected" => expectation, "actual" => focus.length,
+                  "matched" => matched, "expected_type" => type_family(expectation),
+                  "actual_type" => "numeric", "evaluated" => true, "source" => "product" }
+    end
+  end
+
+  { "focus_first_surface" => :first, "focus_last_surface" => :last }.each do |key, which|
+    next unless expected.key?(key)
+    if !product.key?("review_focus")
+      missing.call(key, expected[key], "missing_review_focus")
+      next
+    end
+    focus = Array(product["review_focus"])
+    entry = which == :first ? focus.first : focus.last
+    surface = entry.is_a?(Hash) ? entry["surface"] : nil
+    if surface.nil?
+      missing.call(key, expected[key], "empty_review_focus")
+    else
+      record.call(key, expected[key], surface, "product")
+    end
+  end
+
+  if expected.key?("sensitive_area_present")
+    if !product.key?("project_sensitive_areas")
+      missing.call("sensitive_area_present", expected["sensitive_area_present"], "missing_sensitive_areas")
+    else
+      areas = Array(product["project_sensitive_areas"]).map { |item| item.is_a?(Hash) ? item["name"] : nil }
+      expectation = expected["sensitive_area_present"]
+      matched = areas.any? { |name| strict_match(expectation, name) }
+      checks << { "name" => "sensitive_area_present", "expected" => expectation, "actual" => areas,
+                  "matched" => matched, "expected_type" => type_family(expectation),
+                  "actual_type" => "array", "evaluated" => true, "source" => "product" }
+    end
+  end
+
+  if expected.key?("focus_unmapped_paths_count")
+    if !product.key?("review_focus")
+      missing.call("focus_unmapped_paths_count", expected["focus_unmapped_paths_count"], "missing_review_focus")
+    else
+      entry = Array(product["review_focus"]).find { |item| item.is_a?(Hash) && item["surface"] == "unmapped" }
+      if entry.nil?
+        missing.call("focus_unmapped_paths_count", expected["focus_unmapped_paths_count"], "no_unmapped_entry")
+      elsif !entry["paths"].is_a?(Array)
+        missing.call("focus_unmapped_paths_count", expected["focus_unmapped_paths_count"], "malformed_unmapped_paths")
+      else
+        expectation = expected["focus_unmapped_paths_count"]
+        matched = expectation.is_a?(Numeric) && entry["paths"].length == expectation
+        checks << { "name" => "focus_unmapped_paths_count", "expected" => expectation, "actual" => entry["paths"].length,
+                    "matched" => matched, "expected_type" => type_family(expectation),
+                    "actual_type" => "numeric", "evaluated" => true, "source" => "product" }
+      end
+    end
+  end
+
+  expected.each do |key, expectation|
+    match = key.match(/\Asurface_(.+)_(changed|detection)\z/)
+    next unless match
+    surfaces = product["surfaces"]
+    entry = surfaces.is_a?(Hash) ? surfaces[match[1]] : nil
+    if !entry.is_a?(Hash)
+      missing.call(key, expectation, "missing_surface")
+    else
+      record.call(key, expectation, entry[match[2]], "product")
+    end
+  end
+
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
-  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status focus_surface_present stdout_empty stderr_contains stdout_contains stdout_keys_include]
+  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status focus_surface_present stdout_empty stderr_contains stdout_contains stdout_keys_include risk_level risk_configured focus_entry_count focus_first_surface focus_last_surface sensitive_area_present focus_unmapped_paths_count]
   expected.each do |key, expectation|
     next if ignored.include?(key)
     next if key.start_with?("requirement_")
+    next if key.match?(/\Asurface_.+_(changed|detection)\z/)
 
     if special.key?(key) || product.key?(key)
       from_lab = special.key?(key)
@@ -410,6 +502,28 @@ if options[:self_test]
   check_self.call("stderr-mismatch", !evaluate(base.merge("expected" => { "stderr_contains" => "nope-absent" }), facts, 2)["all_matched"])
   unknown_gate = base.merge("expected_gate" => "UNKNOWN", "expected_completion" => "UNKNOWN", "expected_exit" => 2)
   check_self.call("unknown-gate-token", evaluate(unknown_gate, {}, 2)["all_matched"])
+  pr_doc = { "gate" => "PASS", "completion_status" => "complete",
+             "review_risk" => { "level" => "HIGH", "configured" => false },
+             "review_focus" => [{ "surface" => "authorization", "rank" => 1 }, { "surface" => "migration", "rank" => 2 }],
+             "project_sensitive_areas" => [{ "name" => "financial" }],
+             "surfaces" => { "authorization" => { "changed" => true, "detection" => "detected" },
+                             "models" => { "changed" => false, "detection" => "detected" } } }
+  pr_scenario = base.merge("expected_gate" => "PASS", "expected_completion" => "complete", "expected_exit" => 0,
+                           "expected" => { "surface_authorization_changed" => true, "surface_authorization_detection" => "detected",
+                                           "surface_models_changed" => false, "risk_level" => "HIGH", "risk_configured" => false,
+                                           "focus_entry_count" => 2, "focus_first_surface" => "authorization",
+                                           "focus_last_surface" => "migration", "sensitive_area_present" => "financial" })
+  pr_result = evaluate(pr_scenario, pr_doc, 0)
+  check_self.call("surface-focus-risk", pr_result["all_matched"])
+  check_self.call("surface-missing", !evaluate(pr_scenario, { "gate" => "PASS", "completion_status" => "complete" }, 0)["all_matched"])
+  check_self.call("surface-wrong-tier", !evaluate(base.merge("expected_gate" => "PASS", "expected_completion" => "complete", "expected_exit" => 0,
+                                                             "expected" => { "surface_authorization_detection" => "inferred" }), pr_doc, 0)["all_matched"])
+  check_self.call("focus-count-cap", !evaluate(base.merge("expected_gate" => "PASS", "expected_completion" => "complete", "expected_exit" => 0,
+                                                          "expected" => { "focus_entry_count" => 3 }), pr_doc, 0)["all_matched"])
+  check_self.call("unmapped-paths", evaluate(base.merge("expected_gate" => "PASS", "expected_completion" => "complete", "expected_exit" => 0,
+                                                        "expected" => { "focus_unmapped_paths_count" => 2 }),
+                                             { "gate" => "PASS", "completion_status" => "complete",
+                                               "review_focus" => [{ "surface" => "unmapped", "paths" => %w[a b] }] }, 0)["all_matched"])
   if failures.empty?
     $stderr.puts "oracle self-test: PASS (#{LAB_ORACLE_VERSION})"
     puts "oracle self-test: PASS"

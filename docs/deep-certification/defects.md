@@ -36,3 +36,17 @@
   (fails pre-fix with console on stdout) and `#test_check_keeps_sarif_format`.
 - Lab coverage: SARIF had one scenario (`RVLAB-ACCEPT-11`, check only) —
   rejection scenarios are D04 work; obligation `O-CLI-SARIF` stays partial.
+
+## B-003 — Documentation claims 19 change surfaces; code defines 18 (product docs)
+
+- Severity: documentation-only, no behavioral impact.
+- Contract: CHANGELOG 1.6 and `docs/release/1.6-change-intelligence-report.md`
+  claim "19 path-convention surfaces"; `ChangeSurfaces::SURFACES` defines 18
+  (security, authorization, authentication, migration, database, dependencies,
+  public_api, routes, background_jobs, controllers, models, views, mailers,
+  storage, initializers, configuration, test_infrastructure,
+  shared_infrastructure), identical since the 1.6 commit (`d71671c`).
+- Decision: recorded, not version-bumped. A one-word doc fix ships bundled
+  with the next behavioral product change; the campaign inventory counts 18
+  and every surface assertion names the surface explicitly, so no scenario
+  depends on the total.
