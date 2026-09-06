@@ -37,7 +37,10 @@ selected = if options[:scenario]
            else
              abort "Specify --scenario ID, --category NAME, or --all"
            end
-abort "No matching scenarios" if selected.empty?
+if selected.empty?
+  $stderr.puts "No scenarios selected; refusing to certify an empty campaign."
+  exit 2
+end
 
 Candidate = Struct.new(:command, :env, :spec, :identity, keyword_init: true)
 
@@ -873,7 +876,16 @@ def shallow_fixture(root, work_dir)
   raise "shallow clone failed: #{stderr}" unless status.success?
 end
 
-candidate = resolve_candidate(ROOT, candidate_doc, options)
+begin
+  candidate = resolve_candidate(ROOT, candidate_doc, options)
+rescue StandardError => error
+  failure_summary = { "candidate" => candidate_doc["candidate"], "results" => [], "counts" => {},
+                      "status" => "BLOCKED", "error" => "#{error.class}: #{error.message}" }
+  FileUtils.mkdir_p(File.join(ROOT, "artifacts"))
+  File.write(File.join(ROOT, "artifacts", "lab-run-summary.json"), JSON.pretty_generate(failure_summary))
+  $stderr.puts "Candidate installation failed (BLOCKED): #{error.message}"
+  exit 2
+end
 FileUtils.mkdir_p(File.join(ROOT, "artifacts"))
 File.write(File.join(ROOT, "artifacts", "candidate-identity.json"), JSON.pretty_generate(candidate.identity))
 
@@ -881,7 +893,24 @@ results = []
 selected.each do |scenario|
   id = scenario.fetch("id")
   artifact_dir = File.join(ROOT, "artifacts", id)
-  FileUtils.rm_rf(artifact_dir)
+  lock = { "locked" => false }
+  acquired = LabSupport.acquire_scenario_lock(ROOT, id)
+  unless acquired["locked"]
+    failure = { "scenario_id" => id, "title" => scenario["title"], "status" => "BLOCKED",
+                "error" => "concurrent run detected (holder pid #{acquired['holder']}); artifacts left untouched", "duration_seconds" => 0.0 }
+    FileUtils.mkdir_p(artifact_dir)
+    File.write(result_path(artifact_dir, "runner-error.json"), JSON.pretty_generate(failure))
+    results << { "id" => id, "category" => scenario["category"], "status" => "BLOCKED", "duration_seconds" => 0.0, "error" => failure["error"] }
+    next
+  end
+  lock = acquired
+  if File.file?(File.join(artifact_dir, "lab-observation.json")) || File.file?(File.join(artifact_dir, "observed.json"))
+    attempts_dir = File.join(ROOT, "artifacts", "#{id}.attempts")
+    FileUtils.mkdir_p(attempts_dir)
+    FileUtils.mv(artifact_dir, File.join(attempts_dir, "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-pid#{Process.pid}"))
+  else
+    FileUtils.rm_rf(artifact_dir)
+  end
   FileUtils.mkdir_p(artifact_dir)
   started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   command = scenario.fetch("command")
@@ -890,10 +919,11 @@ selected.each do |scenario|
     skipped = { "scenario_id" => id, "title" => scenario["title"], "status" => "SKIPPED", "reason" => "candidate capability is not publicly available", "candidate" => candidate.identity }
     File.write(result_path(artifact_dir, "observed.json"), JSON.pretty_generate(skipped))
     results << { "id" => id, "category" => scenario["category"], "status" => "SKIPPED", "duration_seconds" => 0.0 }
+    LabSupport.release_scenario_lock(lock)
     next
   end
 
-  work_dir = File.join(ROOT, "tmp", "scenario-#{id.downcase.gsub(/[^a-z0-9]+/, '-')}")
+  work_dir = File.join(ROOT, "tmp", "scenario-#{id.downcase.gsub(/[^a-z0-9]+/, '-')}-pid#{Process.pid}")
   setup = scenario.fetch("setup")
   env = {}
   begin
@@ -905,21 +935,46 @@ selected.each do |scenario|
       LabSupport.clone_fixture(ROOT, work_dir, branch: setup["branch"])
     end
     env = LabSupport.apply_operations(work_dir, setup.fetch("operations", []), candidate: candidate, env: env)
+    fixture_before = LabSupport.fixture_identity(work_dir)
     interface = command.fetch("interface")
     observed = case interface
-               when "cli"
-                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
-                 payload = LabSupport.json(stdout)
-                 File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
-                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
-                 payload.merge("exit_code" => status.exitstatus)
-               when "cli_sarif"
-                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
-                 sarif = LabSupport.json(stdout)
-                 File.write(result_path(artifact_dir, "railverdict-result.sarif"), stdout)
-                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
-                 sarif_pass = status.success? && sarif["version"] == "2.1.0" && sarif["runs"].is_a?(Array) && sarif["runs"].first.dig("tool", "driver", "name") == "RailVerdict"
-                 { "lab_result" => { "sarif_pass" => sarif_pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => status.exitstatus }
+                when "cli"
+                  step_timeout = command["timeout_seconds"] || scenario["timeout_seconds"]
+                  stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env, timeout_seconds: step_timeout)
+                  File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
+                  File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                  begin
+                    payload = LabSupport.json_strict(stdout)
+                    payload = nil unless payload.is_a?(Hash)
+                  rescue JSON::ParserError => error
+                    payload = nil
+                    parse_error = "stdout_unparseable: #{error.message[0, 200]}"
+                  end
+                  if payload.nil?
+                    payload = { "lab_error" => parse_error || "stdout_not_an_object", "lab_stdout_bytes" => stdout.bytesize }
+                  end
+                  payload["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  payload.merge("exit_code" => status.exitstatus)
+                when "cli_sarif"
+                  step_timeout = command["timeout_seconds"] || scenario["timeout_seconds"]
+                  stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env, timeout_seconds: step_timeout)
+                  File.write(result_path(artifact_dir, "railverdict-result.sarif"), stdout)
+                  File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                  begin
+                    sarif = LabSupport.json_strict(stdout)
+                    sarif = nil unless sarif.is_a?(Hash)
+                  rescue JSON::ParserError => error
+                    sarif = { "lab_error" => "sarif_unparseable: #{error.message[0, 200]}" }
+                  end
+                  runs = sarif.is_a?(Hash) ? sarif["runs"] : nil
+                  sarif_pass = status.success? && sarif.is_a?(Hash) && sarif["version"] == "2.1.0" && runs.is_a?(Array) &&
+                    runs.first.is_a?(Hash) && runs.first.dig("tool", "driver", "name") == "RailVerdict"
+                  envelope = { "lab_result" => { "sarif_pass" => sarif_pass }, "lab_synthesized_gate" => true,
+                               "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass",
+                               "exit_code" => status.exitstatus }
+                  envelope["lab_result"]["lab_parse_error"] = sarif["lab_error"] if sarif.is_a?(Hash) && sarif["lab_error"]
+                  envelope["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  envelope
                when "mcp_repair"
                  mcp_repair(candidate, work_dir, command.fetch("cheat"))
                when "mcp_security"
@@ -959,6 +1014,8 @@ selected.each do |scenario|
                else
                  raise "unknown scenario interface #{interface}"
                end
+    observed["fixture_before"] = fixture_before
+    observed["fixture_after"] = LabSupport.fixture_identity(work_dir)
     observed["candidate"] = candidate.identity
     observed["duration_seconds"] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(3)
     observed_path = result_path(artifact_dir, "observed.json")
@@ -966,6 +1023,11 @@ selected.each do |scenario|
 
     oracle_stdout, oracle_stderr, oracle_status = LabSupport.run(["ruby", File.join(ROOT, "scripts", "lab_oracle"), "--scenario", id, "--result", observed_path, "--exit-code", observed.fetch("exit_code", 1).to_s], cwd: ROOT)
     File.write(result_path(artifact_dir, "oracle.json"), oracle_stdout)
+    begin
+      JSON.parse(oracle_stdout)
+    rescue JSON::ParserError
+      raise "oracle emitted invalid JSON for #{id}"
+    end
     File.write(result_path(artifact_dir, "oracle-diagnostics.log"), oracle_stderr)
     results << { "id" => id, "category" => scenario["category"], "status" => oracle_status.success? ? "PASS" : "FAIL", "duration_seconds" => observed["duration_seconds"], "exit_code" => observed["exit_code"] }
   rescue StandardError => error
@@ -974,10 +1036,15 @@ selected.each do |scenario|
     results << { "id" => id, "category" => scenario["category"], "status" => "BLOCKED", "duration_seconds" => failure["duration_seconds"], "error" => failure["error"] }
   ensure
     FileUtils.rm_rf(work_dir)
+    LabSupport.release_scenario_lock(lock)
   end
 end
 
 summary = { "candidate" => candidate.identity, "results" => results, "counts" => results.group_by { |result| result["status"] }.transform_values(&:length) }
 File.write(File.join(ROOT, "artifacts", "lab-run-summary.json"), JSON.pretty_generate(summary))
+if results.any? && results.all? { |result| result["status"] == "SKIPPED" }
+  $stderr.puts "All #{results.length} selected scenarios were SKIPPED; refusing to certify an empty campaign."
+  exit 2
+end
 puts JSON.pretty_generate(summary["counts"])
 exit(results.any? { |result| result["status"] == "BLOCKED" } ? 2 : results.any? { |result| result["status"] == "FAIL" } ? 1 : 0)

@@ -8,6 +8,32 @@ require "yaml"
 ROOT = File.expand_path("..", __dir__)
 MANIFEST = File.join(ROOT, "lab", "scenarios.yml")
 
+LAB_ORACLE_VERSION = "2.1.0"
+
+# Keys that select sub-assertions but are not assertions themselves.
+SELECTOR_KEYS = %w[analyzer].freeze
+
+def type_family(value)
+  case value
+  when true, false then "boolean"
+  when Numeric then "numeric"
+  when String then "string"
+  when Array then "array"
+  when Hash then "hash"
+  when nil then "null"
+  else "other"
+  end
+end
+
+# Strict comparison: missing/null never matches, and the type family must
+# agree, so `false`, `0`, `nil`, `[]`, and `{}` are never interchangeable.
+def strict_match(expectation, actual)
+  return false if actual.nil?
+  return false unless type_family(expectation) == type_family(actual)
+
+  expectation == actual
+end
+
 def lookup(value, *paths)
   paths.each do |path|
     current = value
@@ -17,16 +43,12 @@ def lookup(value, *paths)
   nil
 end
 
-def analyzer_result(payload, name)
-  Array(payload["analyzer_results"]).find { |item| item["analyzer"] == name } || {}
-end
-
 def expected_for(scenario)
   {
     "gate" => scenario["expected_gate"],
     "completion_status" => scenario["expected_completion"],
     "exit_code" => scenario["expected_exit"]
-  }.merge(scenario["expected"] || {}).compact
+  }.merge(scenario["expected"] || {})
 end
 
 def validate_catalog!(manifest)
@@ -47,119 +69,238 @@ end
 
 def evaluate(scenario, actual, exit_code)
   expected = expected_for(scenario)
+  checks = []
+
+  record = lambda do |name, expectation, actual_value, source|
+    matched = strict_match(expectation, actual_value)
+    checks << { "name" => name, "expected" => expectation, "actual" => actual_value, "matched" => matched,
+                "expected_type" => type_family(expectation), "actual_type" => type_family(actual_value),
+                "evaluated" => true, "source" => source }
+  end
+  missing = lambda do |name, expectation, reason|
+    checks << { "name" => name, "expected" => expectation, "actual" => "unevaluated:#{reason}", "matched" => false,
+                "expected_type" => type_family(expectation), "actual_type" => "missing",
+                "evaluated" => false, "source" => "missing" }
+  end
+
+  # A null expectation is a catalog defect, never a pass.
+  expected.each_key do |key|
+    missing.call(key, expected[key], "null_expectation") if expected[key].nil?
+  end
+  expected = expected.reject { |_, value| value.nil? }
+  declared = expected.keys - SELECTOR_KEYS
+
   product = actual["product_result"].is_a?(Hash) ? actual["product_result"] : actual
   effective_exit = actual.key?("exit_code") ? actual["exit_code"] : exit_code
+
   actual_gate = product["gate"] || product.dig("gate_result", "gate") ||
     product.dig("deterministic", "verification", "gate") || actual["gate"] || "UNKNOWN"
   actual_completion = product["completion_status"] || product.dig("gate_result", "completion_status") ||
-    product.dig("deterministic", "verification", "completion_status") || actual["completion_status"]
-  if actual_completion.nil? && product.key?("readiness")
-    actual_completion = product["gate"] == "INCOMPLETE" ? "incomplete" : "complete"
-  end
-  actual_completion ||= "UNKNOWN"
+    product.dig("deterministic", "verification", "completion_status") || actual["completion_status"] || "UNKNOWN"
   actual_policy = product["policy_status"] || product.dig("gate_result", "policy_status") || actual["policy_status"] || "UNKNOWN"
-  checks = []
-
   { "gate" => actual_gate, "completion_status" => actual_completion, "policy_status" => actual_policy, "exit_code" => effective_exit }.each do |key, value|
     next unless expected.key?(key)
-    checks << { "name" => key, "expected" => expected[key], "actual" => value, "matched" => expected[key] == value }
+
+    record.call(key, expected[key], value, "product")
   end
 
-  counts = lookup(product, ["comparison", "counts"]) || lookup(product, ["gate_result", "comparison", "counts"]) || {}
-  findings = Array(product["findings"] || product.dig("gate_result", "findings"))
-  counts = {
-    "introduced" => counts["introduced"] || findings.count { |item| item["state"] == "introduced" },
-    "existing" => counts["existing"] || findings.count { |item| item["state"] == "existing" },
-    "waived" => counts["waived"] || findings.count { |item| item["state"] == "waived" || item["waived"] },
-    "resolved" => counts["resolved"] || Array(lookup(product, ["comparison", "resolved"])).length
-  }
+  stated_counts = lookup(product, ["comparison", "counts"]) || lookup(product, ["gate_result", "comparison", "counts"])
+  findings = product["findings"] || product.dig("gate_result", "findings")
+  findings_present = findings.is_a?(Array)
+  findings = [] unless findings_present
+  resolved_raw = lookup(product, ["comparison", "resolved"], ["gate_result", "comparison", "resolved"])
+  count_source =
+    if stated_counts.is_a?(Hash)
+      "stated"
+    elsif findings_present
+      "derived"
+    else
+      "missing"
+    end
+  count_values =
+    case count_source
+    when "stated"
+      {
+        "introduced" => stated_counts["introduced"],
+        "existing" => stated_counts["existing"],
+        "waived" => stated_counts["waived"],
+        "resolved" => resolved_raw.is_a?(Array) ? resolved_raw.length : resolved_raw
+      }
+    when "derived"
+      {
+        "introduced" => findings.count { |item| item.is_a?(Hash) && item["state"] == "introduced" },
+        "existing" => findings.count { |item| item.is_a?(Hash) && item["state"] == "existing" },
+        "waived" => findings.count { |item| item.is_a?(Hash) && (item["state"] == "waived" || item["waived"]) },
+        "resolved" => 0
+      }
+    end
   %w[introduced existing waived resolved].each do |key|
-    { "min" => ">=", "max" => "<=", "count" => "==" }.each do |suffix, operator|
+    %w[min max count].each do |suffix|
       expectation_key = "#{key}_#{suffix}"
       next unless expected.key?(expectation_key)
-      value = counts[key]
-      matched = case operator
-                when ">=" then value >= expected[expectation_key]
-                when "<=" then value <= expected[expectation_key]
-                else value == expected[expectation_key]
+
+      expectation = expected[expectation_key]
+      value = count_values.nil? ? nil : count_values[key]
+      if value.nil?
+        missing.call(expectation_key, expectation, "missing_counts")
+        next
+      end
+      matched = case suffix
+                when "min" then value.is_a?(Numeric) && expectation.is_a?(Numeric) && value >= expectation
+                when "max" then value.is_a?(Numeric) && expectation.is_a?(Numeric) && value <= expectation
+                else strict_match(expectation, value)
                 end
-      checks << { "name" => expectation_key, "expected" => expected[expectation_key], "actual" => value, "matched" => matched }
+      checks << { "name" => expectation_key, "expected" => expectation, "actual" => value, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(value),
+                  "evaluated" => true, "source" => count_source }
     end
   end
 
   if expected.key?("changed_paths_min")
     paths = lookup(product, ["git", "changed_paths"], ["git", "changed_files"], ["git", "paths"], ["comparison", "changed_paths"], ["changed_paths"])
-    value = paths.is_a?(Array) ? paths.length : (paths.is_a?(Integer) ? paths : 0)
-    checks << { "name" => "changed_paths_min", "expected" => expected["changed_paths_min"], "actual" => value, "matched" => value >= expected["changed_paths_min"] }
+    if paths.nil?
+      missing.call("changed_paths_min", expected["changed_paths_min"], "missing_paths")
+    elsif paths.is_a?(Array) || paths.is_a?(Integer)
+      value = paths.is_a?(Array) ? paths.length : paths
+      expectation = expected["changed_paths_min"]
+      matched = value.is_a?(Numeric) && expectation.is_a?(Numeric) && value >= expectation
+      checks << { "name" => "changed_paths_min", "expected" => expectation, "actual" => value, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(value),
+                  "evaluated" => true, "source" => "product" }
+    else
+      missing.call("changed_paths_min", expected["changed_paths_min"], "malformed_paths")
+    end
   end
 
   if expected.key?("analyzer")
-    result = analyzer_result(product, expected["analyzer"])
+    analyzer_results_present = product.key?("analyzer_results")
+    entries = Array(product["analyzer_results"])
+    entry = entries.find { |item| item.is_a?(Hash) && item["analyzer"] == expected["analyzer"] }
     %w[analyzer_status execution_status evidence_status].each do |key|
       next unless expected.key?(key)
-      actual_value = result[key]
-      actual_value = result["execution_status"] if key == "analyzer_status" && actual_value.nil?
-      checks << { "name" => key, "expected" => expected[key], "actual" => actual_value, "matched" => actual_value == expected[key] }
+
+      if !analyzer_results_present
+        missing.call(key, expected[key], "missing_analyzer_results")
+      elsif entry.nil?
+        record.call(key, expected[key], "analyzer_not_found:#{expected['analyzer']}", "product")
+      else
+        actual_value = entry[key]
+        actual_value = entry["execution_status"] if key == "analyzer_status" && actual_value.nil?
+        record.call(key, expected[key], actual_value, "product")
+      end
     end
   end
+
   if expected.key?("analyzer_status_all")
-    statuses = Array(product["analyzer_results"]).map { |item| item["execution_status"] }
-    matched = statuses.any? && statuses.all? { |status| status == expected["analyzer_status_all"] }
-    checks << { "name" => "analyzer_status_all", "expected" => expected["analyzer_status_all"], "actual" => statuses, "matched" => matched }
+    if !product.key?("analyzer_results")
+      missing.call("analyzer_status_all", expected["analyzer_status_all"], "missing_analyzer_results")
+    else
+      statuses = Array(product["analyzer_results"]).map { |item| item.is_a?(Hash) ? item["execution_status"] : nil }
+      matched = statuses.any? && statuses.all? { |status| strict_match(expected["analyzer_status_all"], status) }
+      checks << { "name" => "analyzer_status_all", "expected" => expected["analyzer_status_all"], "actual" => statuses,
+                  "matched" => matched, "expected_type" => type_family(expected["analyzer_status_all"]),
+                  "actual_type" => "array", "evaluated" => true, "source" => "product" }
+    end
   end
+
   if expected.key?("decision_reason")
-    reasons = Array(product["decision_reasons"]).map { |reason| reason["code"] }
-    checks << { "name" => "decision_reason", "expected" => expected["decision_reason"], "actual" => reasons, "matched" => reasons.include?(expected["decision_reason"]) }
+    if !product.key?("decision_reasons")
+      missing.call("decision_reason", expected["decision_reason"], "missing_decision_reasons")
+    else
+      reasons = Array(product["decision_reasons"]).map { |reason| reason.is_a?(Hash) ? reason["code"] : nil }
+      matched = reasons.any? { |code| strict_match(expected["decision_reason"], code) }
+      checks << { "name" => "decision_reason", "expected" => expected["decision_reason"], "actual" => reasons,
+                  "matched" => matched, "expected_type" => type_family(expected["decision_reason"]),
+                  "actual_type" => "array", "evaluated" => true, "source" => "product" }
+    end
   end
+
   if expected.key?("quality_delta_available")
-    quality_delta = lookup(product, ["quality_delta"], ["pr", "quality_delta"])
-    available = quality_delta.is_a?(Hash) ? quality_delta["available"] : !quality_delta.nil?
-    checks << { "name" => "quality_delta_available", "expected" => expected["quality_delta_available"], "actual" => available, "matched" => available == expected["quality_delta_available"] }
+    pr = product["pr"]
+    qd_present = product.key?("quality_delta") || (pr.is_a?(Hash) && pr.key?("quality_delta")) ||
+      product.key?("quality_delta_available")
+    if !qd_present
+      missing.call("quality_delta_available", expected["quality_delta_available"], "missing_quality_delta")
+    else
+      quality_delta = lookup(product, ["quality_delta"], ["pr", "quality_delta"])
+      available = quality_delta.is_a?(Hash) ? quality_delta["available"] : !quality_delta.nil?
+      record.call("quality_delta_available", expected["quality_delta_available"], available, "product")
+    end
   end
 
   expected.each do |key, expectation|
     next unless key.start_with?("requirement_")
+
     requirement_id = key.sub(/\Arequirement_/, "")
+    if !product.key?("requirements")
+      missing.call(key, expectation, "missing_requirements")
+      next
+    end
     requirements = Array(product["requirements"])
-    entry = requirements.find { |item| item["id"] == requirement_id }
-    actual_value = entry ? entry["status"] : "missing"
-    checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => actual_value == expectation }
+    entry = requirements.find { |item| item.is_a?(Hash) && item["id"] == requirement_id }
+    record.call(key, expectation, entry ? entry["status"] : "requirement_not_found:#{requirement_id}", "product")
   end
 
   if expected.key?("observation_status")
-    first = Array(product["observations"]).first || {}
-    actual_value = first["status"] || "missing"
-    checks << { "name" => "observation_status", "expected" => expected["observation_status"], "actual" => actual_value, "matched" => actual_value == expected["observation_status"] }
+    if !product.key?("observations")
+      missing.call("observation_status", expected["observation_status"], "missing_observations")
+    else
+      first = Array(product["observations"]).first || {}
+      record.call("observation_status", expected["observation_status"], first.is_a?(Hash) ? first["status"] : nil, "product")
+    end
   end
 
   if expected.key?("focus_surface_present")
-    focus = Array(product["review_focus"]) + Array(product.dig("review", "focus"))
-    surfaces = focus.map { |item| item["surface"] }
-    matched = surfaces.include?(expected["focus_surface_present"])
-    checks << { "name" => "focus_surface_present", "expected" => expected["focus_surface_present"], "actual" => surfaces, "matched" => matched }
+    review = product["review"]
+    focus_present = product.key?("review_focus") || (review.is_a?(Hash) && review.key?("focus"))
+    if !focus_present
+      missing.call("focus_surface_present", expected["focus_surface_present"], "missing_review_focus")
+    else
+      focus = Array(product["review_focus"]) + Array(review.is_a?(Hash) ? review["focus"] : nil)
+      surfaces = focus.map { |item| item.is_a?(Hash) ? item["surface"] : nil }
+      matched = surfaces.any? { |surface| strict_match(expected["focus_surface_present"], surface) }
+      checks << { "name" => "focus_surface_present", "expected" => expected["focus_surface_present"], "actual" => surfaces,
+                  "matched" => matched, "expected_type" => type_family(expected["focus_surface_present"]),
+                  "actual_type" => "array", "evaluated" => true, "source" => "product" }
+    end
   end
 
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
-  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status]
+  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status focus_surface_present]
   expected.each do |key, expectation|
     next if ignored.include?(key)
-    next unless special.key?(key) || product.key?(key)
-    actual_value = special.key?(key) ? special[key] : product[key]
-    matched = if key == "boundary_changed" && expectation == true
-                actual_value == true || (actual_value.is_a?(Hash) && actual_value.values.any? { |value| value == true })
-              else
-                actual_value == expectation
-              end
-    checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => matched }
+    next if key.start_with?("requirement_")
+
+    if special.key?(key) || product.key?(key)
+      from_lab = special.key?(key)
+      actual_value = from_lab ? special[key] : product[key]
+      matched = if key == "boundary_changed" && expectation == true
+                  actual_value == true || (actual_value.is_a?(Hash) && actual_value.values.any? { |value| value == true })
+                else
+                  strict_match(expectation, actual_value)
+                end
+      checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => matched,
+                  "expected_type" => type_family(expectation), "actual_type" => type_family(actual_value),
+                  "evaluated" => true, "source" => from_lab ? "lab_result" : "product" }
+    else
+      missing.call(key, expectation, "unconsumed_expectation")
+    end
   end
 
+  evaluated_names = checks.select { |check| check["evaluated"] }.map { |check| check["name"] }
+  unconsumed = declared - evaluated_names
   {
     "scenario_id" => scenario["id"],
     "title" => scenario["title"],
+    "oracle_version" => LAB_ORACLE_VERSION,
     "all_matched" => checks.all? { |check| check["matched"] },
+    "declared_assertions" => declared,
+    "evaluated_assertions" => evaluated_names.uniq,
+    "failed_assertions" => checks.reject { |check| check["matched"] }.map { |check| check["name"] },
+    "unconsumed_assertions" => unconsumed,
     "checks" => checks,
     "actual" => { "gate" => actual_gate, "completion_status" => actual_completion, "policy_status" => actual_policy, "exit_code" => effective_exit,
-                  "introduced_count" => counts["introduced"], "existing_count" => counts["existing"], "waived_count" => counts["waived"] }
+                  "counts_source" => count_source }
   }
 end
 
@@ -176,19 +317,71 @@ manifest = YAML.safe_load(File.read(MANIFEST), aliases: true)
 validate_catalog!(manifest)
 
 if options[:self_test]
-  scenario = { "id" => "self", "title" => "self", "expected_gate" => "INCOMPLETE", "expected_completion" => "incomplete", "expected_exit" => 2,
-               "expected" => {}, "setup" => {}, "command" => {}, "category" => "self", "description" => "self", "cleanup" => "none", "tags" => [] }
-  raise "oracle refusal self-test failed" unless evaluate(scenario, { "gate" => "INCOMPLETE", "completion_status" => "incomplete" }, 2)["all_matched"]
-  raise "oracle false-PASS self-test failed" if evaluate(scenario, { "gate" => "PASS", "completion_status" => "complete" }, 0)["all_matched"]
-  puts "oracle self-test: PASS"
-  exit 0
+  failures = []
+  check_self = lambda do |name, condition|
+    failures << name unless condition
+  end
+  base = { "id" => "self", "title" => "self", "expected_gate" => "INCOMPLETE", "expected_completion" => "incomplete", "expected_exit" => 2,
+           "expected" => {}, "setup" => {}, "command" => {}, "category" => "self", "description" => "self", "cleanup" => "none", "tags" => [] }
+  passing = { "gate" => "INCOMPLETE", "completion_status" => "incomplete" }
+  check_self.call("refusal", evaluate(base, passing, 2)["all_matched"])
+  check_self.call("false-pass", !evaluate(base, { "gate" => "PASS", "completion_status" => "complete" }, 0)["all_matched"])
+  check_self.call("missing-gate", !evaluate(base, { "completion_status" => "incomplete" }, 2)["all_matched"])
+  check_self.call("missing-exit", !evaluate(base, passing, nil)["all_matched"])
+  typo = base.merge("expected" => { "introduce_min" => 1 })
+  typo_result = evaluate(typo, passing, 2)
+  check_self.call("typo-unconsumed", !typo_result["all_matched"] && typo_result["unconsumed_assertions"].include?("introduce_min"))
+  no_counts = base.merge("expected_gate" => "FAIL", "expected_completion" => "complete", "expected_exit" => 1,
+                         "expected" => { "introduced_min" => 1 })
+  check_self.call("missing-counts", !evaluate(no_counts, { "gate" => "FAIL", "completion_status" => "complete" }, 1)["all_matched"])
+  derived = evaluate(no_counts, { "gate" => "FAIL", "completion_status" => "complete",
+                                  "findings" => [{ "state" => "introduced" }] }, 1)
+  check_self.call("derived-counts", derived["all_matched"])
+  check_self.call("zero-max-on-empty", !evaluate(base.merge("expected" => { "introduced_max" => 0 }), passing, 2)["all_matched"])
+  bool_scenario = base.merge("expected" => { "weird_flag" => false })
+  check_self.call("bool-missing", !evaluate(bool_scenario, passing, 2)["all_matched"])
+  check_self.call("bool-false", evaluate(bool_scenario, passing.merge("weird_flag" => false), 2)["all_matched"])
+  check_self.call("bool-zero", !evaluate(bool_scenario, passing.merge("weird_flag" => 0), 2)["all_matched"])
+  check_self.call("bool-null", !evaluate(bool_scenario, passing.merge("weird_flag" => nil), 2)["all_matched"])
+  check_self.call("bool-empty-array", !evaluate(bool_scenario, passing.merge("weird_flag" => []), 2)["all_matched"])
+  qd_scenario = base.merge("expected" => { "quality_delta_available" => false })
+  check_self.call("qd-missing", !evaluate(qd_scenario, passing, 2)["all_matched"])
+  check_self.call("qd-present-false", evaluate(qd_scenario, passing.merge("quality_delta" => { "available" => false }), 2)["all_matched"])
+  cp_scenario = base.merge("expected" => { "changed_paths_min" => 1 })
+  check_self.call("paths-missing", !evaluate(cp_scenario, passing, 2)["all_matched"])
+  check_self.call("paths-present", evaluate(cp_scenario, passing.merge("git" => { "changed_paths" => %w[a b] }), 2)["all_matched"])
+  ar_scenario = base.merge("expected" => { "analyzer" => "rspec", "analyzer_status" => "succeeded" })
+  check_self.call("analyzer-missing", !evaluate(ar_scenario, passing, 2)["all_matched"])
+  check_self.call("analyzer-present", evaluate(ar_scenario, passing.merge("analyzer_results" => [{ "analyzer" => "rspec", "execution_status" => "succeeded" }]), 2)["all_matched"])
+  if failures.empty?
+    $stderr.puts "oracle self-test: PASS (#{LAB_ORACLE_VERSION})"
+    puts "oracle self-test: PASS"
+    exit 0
+  else
+    $stderr.puts "oracle self-test FAILURES: #{failures.join(', ')}"
+    exit 1
+  end
 end
 
 scenario = manifest.fetch("scenarios").find { |item| item["id"] == options[:scenario] }
-abort "[ORACLE ERROR] unknown scenario #{options[:scenario]}" unless scenario
-abort "[ORACLE ERROR] result file is missing" unless options[:result] && File.file?(options[:result])
-
-actual = JSON.parse(File.read(options[:result]))
+if scenario.nil?
+  $stderr.puts "[ORACLE ERROR] unknown scenario #{options[:scenario]}"
+  exit 2
+end
+if options[:result].nil? || !File.file?(options[:result])
+  $stderr.puts "[ORACLE ERROR] result file is missing"
+  exit 2
+end
+begin
+  actual = JSON.parse(File.read(options[:result]))
+rescue JSON::ParserError => error
+  $stderr.puts "[ORACLE ERROR] result is not valid JSON: #{error.message}"
+  exit 2
+end
+unless actual.is_a?(Hash)
+  $stderr.puts "[ORACLE ERROR] result must be a JSON object"
+  exit 2
+end
 observation = evaluate(scenario, actual, options[:exit_code])
 observation["candidate"] = actual["candidate"] if actual["candidate"]
 observation["duration_seconds"] = actual["duration_seconds"] if actual["duration_seconds"]
@@ -197,11 +390,11 @@ File.write(artifact, JSON.pretty_generate(observation)) if File.directory?(File.
 puts JSON.pretty_generate(observation)
 
 if observation["all_matched"]
-  puts "\n✅ [LAB ORACLE PASS] #{scenario['id']} matched the public contract."
+  $stderr.puts "[LAB ORACLE PASS] #{scenario['id']} matched the public contract."
   exit 0
 end
 
-$stderr.puts "\n❌ [LAB ORACLE FAIL] #{scenario['id']} did not match the public contract."
+$stderr.puts "[LAB ORACLE FAIL] #{scenario['id']} did not match the public contract."
 observation["checks"].reject { |check| check["matched"] }.each do |check|
   $stderr.puts "   - #{check['name']}: expected #{check['expected']}, got #{check['actual']}"
 end
