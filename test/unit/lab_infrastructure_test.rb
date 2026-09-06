@@ -21,12 +21,16 @@ class LabInfrastructureTest < Minitest::Test
     end
   end
 
-  def test_candidate_is_an_exact_published_package_contract
+  def test_candidate_is_an_exact_package_contract
     candidate = @candidate.fetch("candidate")
-    assert_equal "published", candidate.fetch("mode")
+    assert_includes %w[published local_build], candidate.fetch("mode")
     assert_equal 64, candidate.fetch("gem_sha256").length
     assert_match(/\A[0-9a-f]{64}\z/, candidate.fetch("gem_sha256"))
     assert candidate["source_sha"].nil? || candidate["source_sha"].match?(/\A[0-9a-f]{40}\z/)
+    if candidate.fetch("mode") == "local_build"
+      assert_match(/\A[0-9a-f]{40}\z/, candidate.fetch("source_sha").to_s, "local builds pin an exact source commit")
+      assert candidate.fetch("gem_file"), "local builds name the exact gem file"
+    end
   end
 
   def test_catalog_is_versioned_and_complete
