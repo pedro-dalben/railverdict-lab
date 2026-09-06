@@ -106,6 +106,10 @@ module LabSupport
   rescue StandardError => error
     { "error" => "#{error.class}: #{error.message}" }
   end
+  def stage(work_dir, paths)
+    _stdout, stderr, status = git(work_dir, "add", "--", *Array(paths))
+    raise "fixture stage failed: #{stderr}" unless status.success?
+  end
   def acquire_scenario_lock(root, id)
     lock_dir = File.join(root, "artifacts", "#{id}.lock")
     FileUtils.mkdir_p(File.dirname(lock_dir))
@@ -235,6 +239,8 @@ module LabSupport
         env["PATH"] = "#{File.join(work_dir, "tmp", "fake-bin")}:#{ENV.fetch("PATH", "")}".freeze
       when "commit"
         commit(work_dir, operation.fetch("message", "scenario change"))
+      when "stage"
+        stage(work_dir, operation.fetch("paths", operation.fetch("path", [])))
       when "baseline_create"
         _stdout, stderr, status = product_run(candidate, ["baseline", "create"], cwd: work_dir, extra_env: env)
         raise "baseline create failed: #{stderr}" unless status.success?

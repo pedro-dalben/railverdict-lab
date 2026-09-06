@@ -5727,3 +5727,22 @@ scenarios:
   tags:
   - acceptance
   - cli-surface
+- id: DEEP-GIT-SPLIT-01
+  title: staged-unstaged placement swap invalidates the receipt
+  category: freshness
+  description: Swapping which content sits in the index versus the worktree changes both digests, so the pre-swap receipt must verify stale with index and worktree reasons.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: receipt_swap
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_swap_stale: true
+  cleanup: remove_worktree
+  tags:
+  - freshness
+  - git-identity
+  - deep

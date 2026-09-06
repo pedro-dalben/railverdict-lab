@@ -210,6 +210,22 @@ class LabOracleTrustTest < Minitest::Test
       assert File.directory?(File.join(root, "artifacts", "X.lock")), "foreign lock must survive release"
     end
   end
+  # LAB-12: the stage operation phases content without committing it.
+  def test_stage_operation_stages_without_committing
+    require_relative "../../scripts/lab_support"
+    stub = Struct.new(:command, :env).new("true", {})
+    Dir.mktmpdir do |dir|
+      LabSupport.fresh_fixture(dir)
+      LabSupport.write_file(dir, "tracked.txt", "v1\n")
+      LabSupport.apply_operations(dir, [{ "name" => "commit", "message" => "base" }], candidate: stub, env: {})
+      LabSupport.apply_operations(dir, [{ "name" => "write", "path" => "tracked.txt", "content" => "v2\n" }], candidate: stub, env: {})
+      LabSupport.apply_operations(dir, [{ "name" => "stage", "paths" => ["tracked.txt"] }], candidate: stub, env: {})
+      status_out, = LabSupport.git(dir, "status", "--short")
+      assert_equal "M  tracked.txt", status_out.strip
+      head_out, = LabSupport.git(dir, "rev-parse", "HEAD")
+      refute_empty head_out.strip
+    end
+  end
 
   # LAB-12: setup operations fail before any measurement.
   def test_setup_failures_raise_before_measurement

@@ -432,6 +432,27 @@ def handoff_flow(candidate, work_dir, artifact_dir)
   base.merge("exit_code" => status2.exitstatus)
 end
 
+def receipt_swap_flow(candidate, work_dir, artifact_dir)
+  target = "app/models/customer.rb"
+  original = File.read(File.join(work_dir, target))
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n")
+  LabSupport.stage(work_dir, target)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n# split-C\n")
+  created, create_exit = receipt_create(candidate, work_dir)
+  raise "swap setup did not bind a fresh receipt (exit=#{create_exit})" unless create_exit == 0
+  receipt_path = write_temp_receipt(work_dir, created)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n# split-C\n# split-D\n")
+  LabSupport.stage(work_dir, target)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n")
+  validation, _verify_exit = receipt_verify(candidate, work_dir, receipt_path)
+  reasons = Array(validation["reasons"])
+  stale = validation["status"] == "stale" && reasons.include?("index_changed") && reasons.include?("worktree_changed")
+  File.write(result_path(artifact_dir, "swap-receipt.json"), JSON.pretty_generate(created))
+  File.write(result_path(artifact_dir, "swap-validation.json"), JSON.pretty_generate(validation))
+  { "lab_result" => { "receipt_swap_stale" => stale, "reasons" => reasons }, "lab_synthesized_gate" => true,
+    "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+
 
 def mcp_review(candidate, work_dir, base)
   base_sha = LabSupport.git(work_dir, "rev-parse", base).first.to_s.strip
@@ -1090,6 +1111,8 @@ selected.each do |scenario|
                   explain_flow(candidate, work_dir, artifact_dir)
                 when "handoff_flow"
                   handoff_flow(candidate, work_dir, artifact_dir)
+                when "receipt_swap"
+                  receipt_swap_flow(candidate, work_dir, artifact_dir)
                 when "mcp_review"
                   mcp_review(candidate, work_dir, command.fetch("base", "main"))
                 when "review_determinism"
