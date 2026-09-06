@@ -4846,3 +4846,410 @@ scenarios:
   tags:
   - policy
   - engineering-policy
+- id: RVLAB-WF-01
+  title: Review packet projects gate policy and recovery
+  category: review_workflow
+  description: A clean change produces a review packet whose decision mirrors the gate with explicit requirements and recovery.
+  setup:
+    strategy: clone
+    branch: lab/wf-01-packet
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - review
+    - show
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-02
+  title: Human observation binds to fresh state
+  category: review_workflow
+  description: An observation built over the current HEAD validates as valid_bound through review observe.
+  setup:
+    strategy: clone
+    branch: lab/wf-02-observe
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: review_observe_flow
+    mode: valid
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    observation_status: valid_bound
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-03
+  title: Observation over moved state is stale
+  category: review_workflow
+  description: Committing after the observation was built makes review observe report stale, never silently re-bound.
+  setup:
+    strategy: clone
+    branch: lab/wf-03-stale
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: review_observe_flow
+    mode: stale
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    observation_status: stale
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-04
+  title: Tampered observation is invalid
+  category: review_workflow
+  description: Flipping one character after the observation id was computed fails integrity as invalid.
+  setup:
+    strategy: clone
+    branch: lab/wf-04-tampered
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: review_observe_flow
+    mode: tampered
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    observation_status: invalid
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-05
+  title: Unknown author is untrusted
+  category: review_workflow
+  description: An observation declaring an unknown author is refused as untrusted before any binding check.
+  setup:
+    strategy: clone
+    branch: lab/wf-05-untrusted
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: review_observe_flow
+    mode: untrusted
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    observation_status: untrusted
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-06
+  title: Workflow closes ready on clean change
+  category: review_workflow
+  description: Review complete over a clean verification yields readiness ready with exit 0.
+  setup:
+    strategy: clone
+    branch: lab/wf-06-ready
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - review
+    - complete
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    readiness: ready
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-07
+  title: Workflow blocked by gate on deterministic failure
+  category: review_workflow
+  description: A lint offense under strict mode closes as blocked_by_gate with exit 1; no observation can lift it.
+  setup:
+    strategy: clone
+    branch: lab/wf-07-blocked-gate
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: strict
+        analyzers:
+          rubocop:
+            enabled: true
+            required: true
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_bad.rb
+      content: "y = 2   \n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - review
+    - complete
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    readiness: blocked_by_gate
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-08
+  title: Workflow review pending never upgrades via observation
+  category: review_workflow
+  description: A migration under a human-review rule stays review_pending with exit 3 even when a bound observation is attached.
+  setup:
+    strategy: clone
+    branch: lab/wf-08-pending
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: false
+            required: false
+        git:
+          base: main
+        engineering_policy:
+          review:
+            high:
+              human_review: required
+    - name: write
+      path: db/migrate/20260905000000_lab_wf.rb
+      content: "class LabWf < ActiveRecord::Migration[8.1]\n  def change\n  end\nend\n"
+    - name: commit
+  command:
+    interface: review_observe_complete
+    base: main
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 3
+  expected:
+    readiness: review_pending
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-09
+  title: Repair loop closes successful after fix
+  category: review_workflow
+  description: Building a repair packet, fixing the offense without committing, and running repair verify yields successful with exit 0.
+  setup:
+    strategy: clone
+    branch: lab/wf-09-repair
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: bad.rb
+      content: "y = 2   \n"
+    - name: commit
+  command:
+    interface: repair_verify_flow
+    fix_content: "# frozen_string_literal: true\n\nputs 2\n"
+  expected_gate: WARN
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    overall_status: successful
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-10
+  title: MCP review packet matches CLI envelope
+  category: review_workflow
+  description: get_review_packet returns the identical packet id and policy decision as CLI review show from the canonical service.
+  setup:
+    strategy: clone
+    branch: lab/wf-10-parity
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: mcp_review
+    base: main
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    parity_pass: true
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: RVLAB-WF-11
+  title: Repeated review evaluations are identical
+  category: review_workflow
+  description: Two equivalent review show runs produce the identical canonical packet, proving planner determinism.
+  setup:
+    strategy: clone
+    branch: lab/wf-11-determinism
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: |
+        version: 1.7
+        mode: advisory
+        analyzers:
+          rubocop:
+            enabled: true
+            required: false
+        git:
+          base: main
+    - name: write
+      path: app/models/lab_note.rb
+      content: "# lab workflow note\n"
+    - name: commit
+  command:
+    interface: review_determinism
+    base: main
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    determinism_pass: true
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow

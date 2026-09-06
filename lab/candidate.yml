@@ -7,7 +7,7 @@ candidate:
   repository: https://github.com/pedro-dalben/RailVerdict.git
   source_sha: HEAD
   tag: v1.7.0
-  gem_sha256: db3b50b6370b3ba95e0c0f2a6ca15e01ac83f8ed888f234c71349e3a750810d6
+  gem_sha256: 920ce580db2e915e77890a4a1ec72afa4fc6deea56118537b07b45b941d8557b
   frozen_at: '2026-09-05T12:00:00Z'
   scenario_catalog_version: '5.0'
 environment:
@@ -35,6 +35,7 @@ capabilities:
   - explain
   - investigate
   - repair
+  - review
   - receipt
   - handoff
   - mcp
@@ -51,6 +52,9 @@ capabilities:
   - get_verification_receipt
   - get_pr_intelligence
   - get_engineering_policy
+  - get_review_packet
+  - verify_review_observation
+  - create_workflow_receipt
   - create_handoff
   - inspect_handoff
   - verify_handoff
@@ -66,3 +70,4 @@ capabilities:
   targeted_rspec: true
   brakeman: true
   engineering_policy: true
+  review_workflow: true
