@@ -5680,3 +5680,50 @@ scenarios:
   tags:
   - refusal
   - cli-surface
+- id: DEEP-CLI-EXP-01
+  title: explain round-trips a real introduced finding
+  category: acceptance
+  description: check surfaces an introduced offense and explain renders its document with exit 0.
+  setup:
+    strategy: clone
+    branch: lab/deep-explain
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\n"
+    - name: commit
+  command:
+    interface: explain_flow
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    explain_roundtrip: true
+    stdout_empty: false
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-HO-01
+  title: handoff create and inspect round-trip on the CLI
+  category: acceptance
+  description: handoff create emits a document with the same handoff_id that handoff inspect reads back, both exit 0.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: handoff_flow
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    handoff_roundtrip: true
+    stdout_empty: false
+    stdout_keys_include:
+    - handoff_id
+    - receipt
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface

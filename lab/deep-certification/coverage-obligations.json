@@ -1,1 +1,881 @@
-{"catalog": {"count": 173, "header": "5.0", "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"}, "generated_at_utc": "2026-09-06T21:30:00Z", "notes": ["scenario_ids list verified representatives; family counts from catalog tally", "dimension flags describe what mapped scenarios assert today; DEEP scenarios in D04-D11 close the gaps", "evidence_refs filled by executing nodes D04-D12; empty here by design", "status covered|partial|missing|not_applicable reflects catalog mapping, not execution"], "obligations": [{"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-HELP-VERSION", "positive": true, "public_contract": "--help/--version exit 0 with usage text", "scenario_ids": ["RVLAB-PACKAGE-01"], "source_ref": "lib/rail_verdict/cli.rb:51-59", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-INIT", "positive": true, "public_contract": "init scaffolds config; re-run without --force exits 2", "scenario_ids": ["RVLAB-PACKAGE-01"], "source_ref": "lib/rail_verdict/cli.rb:100-121", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "console rendering of doctor untested", "obligation_id": "O-CLI-DOCTOR", "positive": true, "public_contract": "doctor reports config+analyzers; json shape; missing dependency refusal", "scenario_ids": ["RVLAB-PACKAGE-01"], "source_ref": "lib/rail_verdict/cli.rb:123-145", "status": "partial"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-CHECK-GATE", "positive": true, "public_contract": "check PASS/WARN/FAIL/INCOMPLETE with exits 0/1/2; strict/advisory/no_new_debt; introduced/existing/waived semantics", "scenario_ids": ["RVLAB-01", "RVLAB-02", "RVLAB-03", "RVLAB-04", "RVLAB-05", "RVLAB-06", "RVLAB-07", "RVLAB-08", "RVLAB-09", "+ACCEPT/RH families (68 check scenarios)"], "source_ref": "lib/rail_verdict/cli.rb:147-171,695-701", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "CLI check --handoff path has no direct argv scenario; covered via MCP/verify_handoff flows only", "obligation_id": "O-CLI-CHECK-HANDOFF", "positive": true, "public_contract": "check --handoff PATH reuses REUSABLE evidence or falls back to verification", "scenario_ids": ["RVLAB-MCP-HANDOFF-01 (tool path)"], "source_ref": "lib/rail_verdict/cli.rb:180-289", "status": "partial"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-PR", "positive": true, "public_contract": "pr changed-scope summary; exits 0/1/2 (never 3); console+JSON sections", "scenario_ids": ["RVLAB-PR-01..04 (pr category, 4)", "RVLAB-CI-01..10 (change intelligence, 10)"], "source_ref": "lib/rail_verdict/cli.rb:291-319", "status": "covered"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": true, "limitation": "boundary values (84/85/86, 0/101, stale/missing coverage) need DEEP scenarios in D08", "obligation_id": "O-CLI-POLICY", "positive": true, "public_contract": "policy evaluates requirements; exits 0/1/2/3; REVIEW_REQUIRED is 3", "scenario_ids": ["RVLAB-POL-01..15 (15)"], "source_ref": "lib/rail_verdict/cli.rb:321-390", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-BASELINE-CREATE", "positive": true, "public_contract": "baseline create writes entries; refuses overwrite without --force; invalid content rejected", "scenario_ids": ["RVLAB-20", "RVLAB-BASELINE-01"], "source_ref": "lib/rail_verdict/cli.rb:552-605", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "always-0-on-completed-gate semantics asserted only implicitly", "obligation_id": "O-CLI-FINDINGS", "positive": true, "public_contract": "findings projection; exit 0 on completed gates even when FAIL; 2 when incomplete", "scenario_ids": ["RVLAB-MCP-FINDINGS-01 (tool path)", "bootstrap flow step"], "source_ref": "lib/rail_verdict/cli.rb:607-631", "status": "partial"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "no CLI argv scenario; MCP explain tool covered separately", "obligation_id": "O-CLI-EXPLAIN", "positive": false, "public_contract": "explain <ref> renders finding explanation; exit 0 on success incl. AI-failure payload", "scenario_ids": [], "source_ref": "lib/rail_verdict/cli.rb:683-718", "status": "missing"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "PRODUCT DEFECT CANDIDATE: advertised (USAGE) and implemented (command_investigate) but undispatched; `railverdict investigate` exits 2 unknown command", "obligation_id": "O-CLI-INVESTIGATE", "positive": false, "public_contract": "investigate top findings (USAGE-advertised)", "scenario_ids": [], "source_ref": "lib/rail_verdict/cli.rb:32,736-778; dispatch 60-85 has no investigate branch", "status": "missing"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-REPAIR-BUILD", "positive": true, "public_contract": "repair <ref> builds packet; stale/unknown finding exits 2", "scenario_ids": ["repair_verify_flow scenarios", "mcp_repair x4 (tool path)"], "source_ref": "lib/rail_verdict/cli.rb:803-834", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-REPAIR-VERIFY", "positive": true, "public_contract": "repair verify --packet: successful 0 / unsuccessful 1 / else 2; boundary change blocks success", "scenario_ids": ["repair_verify_flow x1", "RVLAB-AGENT-11"], "source_ref": "lib/rail_verdict/cli.rb:836-889", "status": "covered"}, {"capability": "review_workflow", "evidence_refs": [], "integration": true, "limitation": "recovery-action executability proven in D09", "obligation_id": "O-CLI-REVIEW", "positive": true, "public_contract": "review show/observe/complete; observe 0 iff all valid_bound; complete readiness exits 0/1/3/2", "scenario_ids": ["RVLAB-WF-01..12 (12)", "review_observe_flow x4", "review_observe_complete x1"], "source_ref": "lib/rail_verdict/cli.rb:392-551", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-RECEIPT", "positive": true, "public_contract": "receipt create/verify with fresh/stale/invalid/unavailable and gate-mirroring exits", "scenario_ids": ["RVLAB-AGENT-01.. (agent family, 15)", "receipt category (5)"], "source_ref": "lib/rail_verdict/cli.rb:916-975,1053-1134", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "CLI handoff create/inspect have no argv scenarios; MCP tools covered", "obligation_id": "O-CLI-HANDOFF-CREATE-INSPECT", "positive": false, "public_contract": "handoff create/inspect CLI surface", "scenario_ids": [], "source_ref": "lib/rail_verdict/cli.rb:1173-1242", "status": "missing"}, {"capability": "cli", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-HANDOFF-VERIFY", "positive": true, "public_contract": "handoff verify REUSABLE 0 else 2 with TOCTOU re-observe", "scenario_ids": ["RVLAB-MCP-HANDOFF-01 (tool path)", "handoff flow step"], "source_ref": "lib/rail_verdict/cli.rb:1244-1297", "status": "partial"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-CLI-MCP-SERVE", "positive": true, "public_contract": "mcp serve stdio transport; 0/2 usage-or-error", "scenario_ids": ["mcp category (10)", "all mcp_* interfaces spawn the server"], "source_ref": "lib/rail_verdict/cli.rb:1340-1356", "status": "covered"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "zero console scenarios in catalog; needs DEEP console-coherence scenarios", "obligation_id": "O-CLI-CONSOLE", "positive": false, "public_contract": "console projection coherent with JSON across commands", "scenario_ids": [], "source_ref": "lib/rail_verdict/reporters/console.rb", "status": "missing"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "only check is covered (RVLAB-ACCEPT-11); doctor/baseline/findings/explain/repair accept --format sarif but render console (source-confirmed wart)", "obligation_id": "O-CLI-SARIF", "positive": true, "public_contract": "SARIF 2.1.0 findings-only projection where advertised", "scenario_ids": ["RVLAB-ACCEPT-11"], "source_ref": "lib/rail_verdict/cli.rb:642-646 + per-command branches", "status": "partial"}, {"capability": "cli", "evidence_refs": [], "integration": false, "limitation": "interrupted/SIGINT path (exit 130) has no scenario; needs DEEP fault scenario", "obligation_id": "O-CLI-INTERRUPT", "positive": false, "public_contract": "interrupted completion exits 130 without gate fabrication", "scenario_ids": [], "source_ref": "lib/rail_verdict/cli.rb:695-701 exit_code_for", "status": "missing"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-PROTOCOL", "positive": true, "public_contract": "initialize/tools-list/ping are protocol ops; stdio JSON-RPC 2.0 2025-11-25; stdout reserved; unknown method/tool errors", "scenario_ids": ["mcp_protocol x1", "mcp category"], "source_ref": "lib/rail_verdict/mcp/server.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-VERIFY", "positive": true, "public_contract": "verify executes analyzers once; FAIL/INCOMPLETE are isError:false; single-execution + caching", "scenario_ids": ["RVLAB-15", "RVLAB-18", "RVLAB-AGENT-01..04", "RVLAB-MCP-PARITY-01"], "source_ref": "lib/rail_verdict/mcp/tools/verify.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-FINDINGS", "positive": true, "public_contract": "list_findings/get_finding parity with CLI findings incl. bounds and unknown-ref errors", "scenario_ids": ["RVLAB-MCP-FINDINGS-01"], "source_ref": "lib/rail_verdict/mcp/tools/list_findings.rb, get_finding.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-REPAIR", "positive": true, "public_contract": "build_repair_packet/verify_repair parity with CLI repair", "scenario_ids": ["mcp_repair x4", "RVLAB-AGENT-11"], "source_ref": "lib/rail_verdict/mcp/tools/build_repair_packet.rb, verify_repair.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": false, "limitation": "thin: preview-path only mentions; needs DEEP parity scenarios in D10", "obligation_id": "O-MCP-EXPLAIN-INVESTIGATE", "positive": true, "public_contract": "explain/investigate advisory tools with preview and ai_disabled errors", "scenario_ids": ["RVLAB-MCP-FINDINGS-01 (mentions)", "RH explain refs"], "source_ref": "lib/rail_verdict/mcp/tools/explain.rb, investigate.rb", "status": "partial"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-RECEIPT-PR", "positive": true, "public_contract": "get_verification_receipt/get_pr_intelligence never rerun analyzers; stale refused explicitly", "scenario_ids": ["RVLAB-MCP-PARITY-01", "mcp_freshness x2", "agent/freshness families"], "source_ref": "lib/rail_verdict/mcp/tools/get_verification_receipt.rb, get_pr_intelligence.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-MCP-HANDOFF", "positive": true, "public_contract": "create/inspect/verify_handoff with decision REUSABLE/VERIFICATION_REQUIRED/INVALID/UNAVAILABLE", "scenario_ids": ["RVLAB-MCP-HANDOFF-01", "mcp_handoff x5"], "source_ref": "lib/rail_verdict/mcp/tools/create_handoff.rb, inspect_handoff.rb, verify_handoff.rb", "status": "covered"}, {"capability": "mcp", "evidence_refs": [], "integration": false, "limitation": "single POL scenario mentions the tool; needs DEEP parity in D10", "obligation_id": "O-MCP-POLICY", "positive": true, "public_contract": "get_engineering_policy returns same readiness as CLI policy", "scenario_ids": ["RVLAB-POL-12", "mcp_policy x1", "policy_drift x1", "policy_determinism x1"], "source_ref": "lib/rail_verdict/mcp/tools/get_engineering_policy.rb", "status": "partial"}, {"capability": "mcp", "evidence_refs": [], "integration": false, "limitation": "CLI paths covered; MCP tool paths need explicit parity scenarios in D10", "obligation_id": "O-MCP-REVIEW", "positive": true, "public_contract": "get_review_packet/verify_review_observation/create_workflow_receipt parity with review CLI", "scenario_ids": ["RVLAB-WF-10", "mcp_review x1"], "source_ref": "lib/rail_verdict/mcp/tools/get_review_packet.rb, verify_review_observation.rb, create_workflow_receipt.rb", "status": "partial"}, {"capability": "mcp", "evidence_refs": [], "integration": false, "limitation": "long sessions and cache isolation across projects exercised lightly; D10 matrix", "obligation_id": "O-MCP-SESSION", "positive": true, "public_contract": "session reuse, repeated calls, no cross-project cache contamination", "scenario_ids": ["mcp category", "determinism x2"], "source_ref": "lib/rail_verdict/mcp/cache.rb, server.rb mutex", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "critical covered; high-forbid needs DEEP scenario in D08", "obligation_id": "O-POL-NEW-FINDINGS", "positive": true, "public_contract": "forbid introduced/changed/moved critical/high vs existing/waived; threshold adjacency", "scenario_ids": ["RVLAB-POL requirement_req-new-findings-critical x2"], "source_ref": "lib/rail_verdict/engineering_policy.rb:109-129", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "84/85/86 trio, 0/101 config rejection, stale/missing/zero-denominator need DEEP scenarios", "obligation_id": "O-POL-COVERAGE", "positive": true, "public_contract": "changed_lines_minimum enforced with verifiable integer counts", "scenario_ids": ["requirement_req-coverage-changed-lines x3"], "source_ref": "lib/rail_verdict/engineering_policy.rb:135-155", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "unavailable/timeout/partial and unknown-analyzer variants need DEEP scenarios", "obligation_id": "O-POL-ANALYZERS", "positive": true, "public_contract": "per-surface require_analyzers incl. missing/disabled/timeout handling", "scenario_ids": ["RVLAB-POL-0x rspec/brakeman/bundler_audit requirements"], "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "TARGETED-insufficient vs FULL-sufficient pair needs DEEP scenario", "obligation_id": "O-POL-SCOPE", "positive": true, "public_contract": "verification_scope full rejects TARGETED execution", "scenario_ids": ["RVLAB-POL req-full-scope-models/migration"], "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "baseline_compatible requirement row thinly covered", "obligation_id": "O-POL-BASELINE-COMPAT", "positive": true, "public_contract": "req-baseline-compatible in no_new_debt/strict deltas", "scenario_ids": ["RVLAB-POL series"], "source_ref": "lib/rail_verdict/engineering_policy.rb:245-251", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": true, "limitation": "migration trigger proven; per-level/area matrix needs D08 expansion", "obligation_id": "O-POL-HUMAN-REVIEW", "positive": true, "public_contract": "human_review required persists across valid observations; never approval", "scenario_ids": ["RVLAB-POL-10 (exit 3)", "requirement_req-human-review-high"], "source_ref": "lib/rail_verdict/engineering_policy.rb:260-294", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "gate_mirror emits no requirement row (decide() mirrors implicitly); mappers must not expect req-gate-*", "obligation_id": "O-POL-GATE-MIRROR", "positive": true, "public_contract": "no violated/unavailable/review_required mirrors gate into decision", "scenario_ids": ["RVLAB-POL series (implicit)"], "source_ref": "lib/rail_verdict/engineering_policy.rb:300-313", "status": "not_applicable"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "drift-after-handoff pair needs DEEP scenario in D08", "obligation_id": "O-POL-DRIFT", "positive": true, "public_contract": "policy drift fresh/policy_drift/unavailable without relabeling v1 documents", "scenario_ids": ["policy_drift x1"], "source_ref": "lib/rail_verdict/engineering_policy.rb:50-52", "status": "partial"}, {"capability": "engineering_policy", "evidence_refs": [], "integration": false, "limitation": "compat matrix (1.0-1.6 configs behave identically) needs DEEP scenarios", "obligation_id": "O-POL-COMPAT", "positive": true, "public_contract": "configs without new rules yield all requirements not_applicable; check/pr unchanged", "scenario_ids": ["RVLAB-01..09 (implicitly, via not_applicable)"], "source_ref": "docs/engineering-policy.md Migration", "status": "partial"}, {"capability": "review_workflow", "evidence_refs": [], "integration": true, "limitation": "", "obligation_id": "O-REV-PACKET", "positive": true, "public_contract": "ReviewPacket deterministic/review lanes, packet_id stability, bounds", "scenario_ids": ["RVLAB-WF-01..07", "RVLAB-WF-10", "review_determinism x1"], "source_ref": "schemas/review-packet-v1.schema.json", "status": "covered"}, {"capability": "review_workflow", "evidence_refs": [], "integration": false, "limitation": "unavailable status has no scenario; needs DEEP case", "obligation_id": "O-REV-OBSERVATION", "positive": true, "public_contract": "observation validation valid_bound/stale/untrusted/invalid/unavailable; author binding; no gate effect", "scenario_ids": ["observation_status valid_bound/stale/invalid/untrusted (4 scenarios)"], "source_ref": "lib/rail_verdict/review_observation.rb:55-93", "status": "partial"}, {"capability": "review_workflow", "evidence_refs": [], "integration": false, "limitation": "blocked_by_evidence has no scenario; needs DEEP case", "obligation_id": "O-REV-RECEIPT", "positive": true, "public_contract": "WorkflowReceipt ready/blocked_by_gate/blocked_by_evidence/review_pending with exits 0/1/2/3", "scenario_ids": ["readiness ready/blocked_by_gate/review_pending (3)", "RVLAB-WF-08 (exit 3)"], "source_ref": "lib/rail_verdict/workflow_receipt.rb:61-72", "status": "partial"}, {"capability": "review_workflow", "evidence_refs": [], "integration": true, "limitation": "DEEP-POL-001 exemplar planned in D09", "obligation_id": "O-REV-NO-APPROVAL", "positive": true, "public_contract": "valid observation (even human 'approved') never clears review_required", "scenario_ids": ["RVLAB-WF-08 (review_pending persists)"], "source_ref": "docs/review-workflow.md; ADR 0021 S5", "status": "partial"}, {"capability": "pr_intelligence", "evidence_refs": [], "integration": false, "limitation": "10 scenarios for 19 surfaces; per-surface positive+near-miss+mixed matrix needs DEEP expansion in D07", "obligation_id": "O-CI-SURFACES", "positive": true, "public_contract": "19 Rails change surfaces with detected/inferred/mixed evidence tiers", "scenario_ids": ["RVLAB-CI-01..10"], "source_ref": "lib/rail_verdict/change_intelligence.rb", "status": "partial"}, {"capability": "pr_intelligence", "evidence_refs": [], "integration": false, "limitation": "risk-level reachability and override precedence need DEEP truth tables", "obligation_id": "O-CI-RISK", "positive": true, "public_contract": "LOW/MEDIUM/HIGH/CRITICAL with reason codes; sensitive areas; overrides; unknown stays unknown", "scenario_ids": ["RVLAB-CI series", "ci-01..10 fixture branches"], "source_ref": "docs/engineering-policy.md Rules; config 1.6 review.*", "status": "partial"}, {"capability": "pr_intelligence", "evidence_refs": [], "integration": false, "limitation": "single unmapped case; 9/10/11-path bounds and mixed mapped/unmapped need DEEP scenarios (1.8.2 regression)", "obligation_id": "O-CI-UNMAPPED", "positive": true, "public_contract": "unsurfaced paths yield one bounded unmapped entry (<=10 paths, ranked last, no risk inflation)", "scenario_ids": ["RVLAB-WF-12 (focus_surface_present: unmapped)"], "source_ref": "CHANGELOG 1.8.2; lib/rail_verdict/change_intelligence.rb", "status": "partial"}, {"capability": "pr_intelligence", "evidence_refs": [], "integration": false, "limitation": "ranking recall corpus is D07 work, not catalog coverage", "obligation_id": "O-CI-FOCUS", "positive": true, "public_contract": "Review Focus ranking, ties, bounds, dedup, no hallucinated paths", "scenario_ids": ["RVLAB-CI series (focus_surface_present x1)"], "source_ref": "lib/rail_verdict/pr_intelligence.rb", "status": "partial"}, {"capability": "analyzers", "evidence_refs": [], "integration": true, "limitation": "fault matrix (crash/timeout/malformed/version) per adapter needs DEEP completion in D04", "obligation_id": "O-AN-RUBOCOP-RSPEC-MINITEST", "positive": true, "public_contract": "real RuboCop/RSpec/Minitest accept+reject with severity/rule/path fidelity", "scenario_ids": ["RVLAB-03/04/05", "analyzers (6)", "RH series"], "source_ref": "lib/rail_verdict/analyzers/", "status": "partial"}, {"capability": "analyzers", "evidence_refs": [], "integration": false, "limitation": "DB absent/stale transitions per contract need DEEP cases", "obligation_id": "O-AN-SIMPLECOV-AUDIT-BRAKEMAN", "positive": true, "public_contract": "SimpleCov native+canonical, bundler-audit vuln/clean with pinned DB, Brakeman exits 0/3/crash-distinct", "scenario_ids": ["simplecov (3)", "RVLAB-15-BRAKEMAN x2", "RVLAB-07"], "source_ref": "lib/rail_verdict/analyzers/", "status": "partial"}, {"capability": "analyzers", "evidence_refs": [], "integration": false, "limitation": "documented as deferred; must stay absent, not faked", "obligation_id": "O-AN-DB-CONSISTENCY", "positive": false, "public_contract": "database_consistency deferred: no structured contract, no fake analyzer", "scenario_ids": [], "source_ref": "CHANGELOG 1.5", "status": "not_applicable"}, {"capability": "git", "evidence_refs": [], "integration": true, "limitation": "rename/unicode/binary covered; staged-vs-unstaged split and empty-tree need DEEP cases", "obligation_id": "O-GIT-SCOPE", "positive": true, "public_contract": "changed-scope enumeration incl. renames, unicode, binary, special names; diff failure never empty diff", "scenario_ids": ["RVLAB-10 (git edge)", "git_changed_scope (2)"], "source_ref": "lib/rail_verdict/ (git state identity)", "status": "partial"}, {"capability": "receipts", "evidence_refs": [], "integration": true, "limitation": "TOCTOU guards and env-dimension races need DEEP deterministic barriers in D05", "obligation_id": "O-GIT-IDENTITY-RECEIPT", "positive": true, "public_contract": "repository state identity; freshness fresh/stale/invalid/unavailable; portability; no signature claims", "scenario_ids": ["agent (15)", "freshness (7)", "portability (4)", "receipt (5)", "environment (8)"], "source_ref": "docs/adr/0016,0017,0018", "status": "covered"}, {"capability": "handoff", "evidence_refs": [], "integration": true, "limitation": "per-analyzer predicates and partial-reuse refusal need DEEP matrix in D06", "obligation_id": "O-REUSE", "positive": true, "public_contract": "whole-set and tiered reuse; RECEIPT_FRESH != EVIDENCE_REUSABLE; reuse is execution avoidance with wrapper proof", "scenario_ids": ["RVLAB-MCP-HANDOFF-01", "mcp_handoff x5", "test_selection x2"], "source_ref": "docs/adr/0019; docs/agent-handoff.md", "status": "partial"}, {"capability": "selection", "evidence_refs": [], "integration": false, "limitation": "lib/ mapping fixed in 1.8.1 needs explicit RSpec+Minitest regression pair (DEEP in D06)", "obligation_id": "O-SELECTION", "positive": true, "public_contract": "targeted mapping per convention + FULL fallback classes; lib/ regression 1.8.1", "scenario_ids": ["RVLAB-15-TARGETED x2", "test_selection x2"], "source_ref": "lib/rail_verdict/rails_context/resolvers/test_candidates.rb", "status": "partial"}, {"capability": "repair", "evidence_refs": [], "integration": true, "limitation": "waiver-vs-repair (DEEP-REPAIR-001) exemplar is D09 work", "obligation_id": "O-REPAIR", "positive": true, "public_contract": "packet -> minimal fix -> verify; waiver/config weakening surfaces boundary_changed, never successful", "scenario_ids": ["repair_anti_cheating (3)", "repair (6)", "mcp_repair x4", "RVLAB-16"], "source_ref": "lib/rail_verdict/repair/", "status": "covered"}, {"capability": "config", "evidence_refs": [], "integration": false, "limitation": "version-by-version invalid-input matrix needs DEEP completion in D04", "obligation_id": "O-CONFIG", "positive": true, "public_contract": "config versions 1-1.7 load; unknown keys/types/limits rejected without false gates", "scenario_ids": ["refusal (18, subset)", "RVLAB-20"], "source_ref": "schemas/configuration-v1*.schema.json", "status": "partial"}, {"capability": "env", "evidence_refs": [], "integration": false, "limitation": "canonical env is local+CI ubuntu; min-rails/ruby pins and analyzer drift (rubocop 1.90 vs 1.89, simplecov 1.2 vs 1.0) are D11 items", "obligation_id": "O-ENV", "positive": true, "public_contract": "canonical environment execution; compat matrix min/current; no invented platforms", "scenario_ids": ["environment (8)", "compatibility.yml (manual)"], "source_ref": "lab/candidate.yml; docs/deep-certification/candidate.lock.json", "status": "partial"}]}
+{
+  "catalog": {
+    "count": 190,
+    "header": "5.0",
+    "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
+  },
+  "generated_at_utc": "2026-09-06T21:30:00Z",
+  "notes": [
+    "scenario_ids list verified representatives; family counts from catalog tally",
+    "dimension flags describe what mapped scenarios assert today; DEEP scenarios in D04-D11 close the gaps",
+    "evidence_refs filled by executing nodes D04-D12; empty here by design",
+    "status covered|partial|missing|not_applicable reflects catalog mapping, not execution"
+  ],
+  "obligations": [
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-HELP-VERSION",
+      "positive": true,
+      "public_contract": "--help/--version exit 0 with usage text",
+      "scenario_ids": [
+        "RVLAB-PACKAGE-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:51-59",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-INIT",
+      "positive": true,
+      "public_contract": "init scaffolds config; re-run without --force exits 2",
+      "scenario_ids": [
+        "RVLAB-PACKAGE-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:100-121",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "console rendering of doctor untested",
+      "obligation_id": "O-CLI-DOCTOR",
+      "positive": true,
+      "public_contract": "doctor reports config+analyzers; json shape; missing dependency refusal",
+      "scenario_ids": [
+        "RVLAB-PACKAGE-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:123-145",
+      "status": "partial"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-CHECK-GATE",
+      "positive": true,
+      "public_contract": "check PASS/WARN/FAIL/INCOMPLETE with exits 0/1/2; strict/advisory/no_new_debt; introduced/existing/waived semantics",
+      "scenario_ids": [
+        "RVLAB-01",
+        "RVLAB-02",
+        "RVLAB-03",
+        "RVLAB-04",
+        "RVLAB-05",
+        "RVLAB-06",
+        "RVLAB-07",
+        "RVLAB-08",
+        "RVLAB-09",
+        "+ACCEPT/RH families (68 check scenarios)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:147-171,695-701",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "CLI check --handoff path has no direct argv scenario; covered via MCP/verify_handoff flows only",
+      "obligation_id": "O-CLI-CHECK-HANDOFF",
+      "positive": true,
+      "public_contract": "check --handoff PATH reuses REUSABLE evidence or falls back to verification",
+      "scenario_ids": [
+        "RVLAB-MCP-HANDOFF-01 (tool path)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:180-289",
+      "status": "partial"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-PR",
+      "positive": true,
+      "public_contract": "pr changed-scope summary; exits 0/1/2 (never 3); console+JSON sections",
+      "scenario_ids": [
+        "RVLAB-PR-01..04 (pr category, 4)",
+        "RVLAB-CI-01..10 (change intelligence, 10)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:291-319",
+      "status": "covered"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "boundary values (84/85/86, 0/101, stale/missing coverage) need DEEP scenarios in D08",
+      "obligation_id": "O-CLI-POLICY",
+      "positive": true,
+      "public_contract": "policy evaluates requirements; exits 0/1/2/3; REVIEW_REQUIRED is 3",
+      "scenario_ids": [
+        "RVLAB-POL-01..15 (15)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:321-390",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-BASELINE-CREATE",
+      "positive": true,
+      "public_contract": "baseline create writes entries; refuses overwrite without --force; invalid content rejected",
+      "scenario_ids": [
+        "RVLAB-20",
+        "RVLAB-BASELINE-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:552-605",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "always-0-on-completed-gate semantics asserted only implicitly",
+      "obligation_id": "O-CLI-FINDINGS",
+      "positive": true,
+      "public_contract": "findings projection; exit 0 on completed gates even when FAIL; 2 when incomplete",
+      "scenario_ids": [
+        "RVLAB-MCP-FINDINGS-01 (tool path)",
+        "bootstrap flow step"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:607-631",
+      "status": "partial"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "explain round-trip proven via explain_flow; non-preview AI orchestration out of scope without a provider",
+      "obligation_id": "O-CLI-EXPLAIN",
+      "positive": false,
+      "public_contract": "explain <ref> renders finding explanation; exit 0 on success incl. AI-failure payload",
+      "scenario_ids": [
+        "DEEP-CLI-EXP-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:683-718",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "preview dispatch proven on 1.8.3; product B-001 fixed and negative-controlled",
+      "obligation_id": "O-CLI-INVESTIGATE",
+      "positive": false,
+      "public_contract": "investigate top findings (USAGE-advertised)",
+      "scenario_ids": [
+        "DEEP-CLI-INV-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:32,736-778; dispatch 60-85 has no investigate branch",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-REPAIR-BUILD",
+      "positive": true,
+      "public_contract": "repair <ref> builds packet; stale/unknown finding exits 2",
+      "scenario_ids": [
+        "repair_verify_flow scenarios",
+        "mcp_repair x4 (tool path)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:803-834",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-REPAIR-VERIFY",
+      "positive": true,
+      "public_contract": "repair verify --packet: successful 0 / unsuccessful 1 / else 2; boundary change blocks success",
+      "scenario_ids": [
+        "repair_verify_flow x1",
+        "RVLAB-AGENT-11"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:836-889",
+      "status": "covered"
+    },
+    {
+      "capability": "review_workflow",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "recovery-action executability proven in D09",
+      "obligation_id": "O-CLI-REVIEW",
+      "positive": true,
+      "public_contract": "review show/observe/complete; observe 0 iff all valid_bound; complete readiness exits 0/1/3/2",
+      "scenario_ids": [
+        "RVLAB-WF-01..12 (12)",
+        "review_observe_flow x4",
+        "review_observe_complete x1"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:392-551",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-RECEIPT",
+      "positive": true,
+      "public_contract": "receipt create/verify with fresh/stale/invalid/unavailable and gate-mirroring exits",
+      "scenario_ids": [
+        "RVLAB-AGENT-01.. (agent family, 15)",
+        "receipt category (5)"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:916-975,1053-1134",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "create/inspect round-trip proven via handoff_flow with matching handoff_id",
+      "obligation_id": "O-CLI-HANDOFF-CREATE-INSPECT",
+      "positive": false,
+      "public_contract": "handoff create/inspect CLI surface",
+      "scenario_ids": [
+        "DEEP-CLI-HO-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:1173-1242",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-HANDOFF-VERIFY",
+      "positive": true,
+      "public_contract": "handoff verify REUSABLE 0 else 2 with TOCTOU re-observe",
+      "scenario_ids": [
+        "RVLAB-MCP-HANDOFF-01 (tool path)",
+        "handoff flow step"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:1244-1297",
+      "status": "partial"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-CLI-MCP-SERVE",
+      "positive": true,
+      "public_contract": "mcp serve stdio transport; 0/2 usage-or-error",
+      "scenario_ids": [
+        "mcp category (10)",
+        "all mcp_* interfaces spawn the server"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:1340-1356",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "Gate PASS/FAIL words proven coherent with exits",
+      "obligation_id": "O-CLI-CONSOLE",
+      "positive": false,
+      "public_contract": "console projection coherent with JSON across commands",
+      "scenario_ids": [
+        "DEEP-CLI-CONSOLE-01",
+        "DEEP-CLI-CONSOLE-02"
+      ],
+      "source_ref": "lib/rail_verdict/reporters/console.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "5 rejections plus check control; product B-002 fixed and negative-controlled",
+      "obligation_id": "O-CLI-SARIF",
+      "positive": true,
+      "public_contract": "SARIF 2.1.0 findings-only projection where advertised",
+      "scenario_ids": [
+        "DEEP-CLI-SARIF-01..06"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:642-646 + per-command branches",
+      "status": "covered"
+    },
+    {
+      "capability": "cli",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "SIGINT yields exit 130 with a genuine INCOMPLETE verdict",
+      "obligation_id": "O-CLI-INTERRUPT",
+      "positive": false,
+      "public_contract": "interrupted completion exits 130 without gate fabrication",
+      "scenario_ids": [
+        "DEEP-CLI-INT-01"
+      ],
+      "source_ref": "lib/rail_verdict/cli.rb:695-701 exit_code_for",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-PROTOCOL",
+      "positive": true,
+      "public_contract": "initialize/tools-list/ping are protocol ops; stdio JSON-RPC 2.0 2025-11-25; stdout reserved; unknown method/tool errors",
+      "scenario_ids": [
+        "mcp_protocol x1",
+        "mcp category"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/server.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-VERIFY",
+      "positive": true,
+      "public_contract": "verify executes analyzers once; FAIL/INCOMPLETE are isError:false; single-execution + caching",
+      "scenario_ids": [
+        "RVLAB-15",
+        "RVLAB-18",
+        "RVLAB-AGENT-01..04",
+        "RVLAB-MCP-PARITY-01"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/verify.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-FINDINGS",
+      "positive": true,
+      "public_contract": "list_findings/get_finding parity with CLI findings incl. bounds and unknown-ref errors",
+      "scenario_ids": [
+        "RVLAB-MCP-FINDINGS-01"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/list_findings.rb, get_finding.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-REPAIR",
+      "positive": true,
+      "public_contract": "build_repair_packet/verify_repair parity with CLI repair",
+      "scenario_ids": [
+        "mcp_repair x4",
+        "RVLAB-AGENT-11"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/build_repair_packet.rb, verify_repair.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "thin: preview-path only mentions; needs DEEP parity scenarios in D10",
+      "obligation_id": "O-MCP-EXPLAIN-INVESTIGATE",
+      "positive": true,
+      "public_contract": "explain/investigate advisory tools with preview and ai_disabled errors",
+      "scenario_ids": [
+        "RVLAB-MCP-FINDINGS-01 (mentions)",
+        "RH explain refs"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/explain.rb, investigate.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-RECEIPT-PR",
+      "positive": true,
+      "public_contract": "get_verification_receipt/get_pr_intelligence never rerun analyzers; stale refused explicitly",
+      "scenario_ids": [
+        "RVLAB-MCP-PARITY-01",
+        "mcp_freshness x2",
+        "agent/freshness families"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/get_verification_receipt.rb, get_pr_intelligence.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-MCP-HANDOFF",
+      "positive": true,
+      "public_contract": "create/inspect/verify_handoff with decision REUSABLE/VERIFICATION_REQUIRED/INVALID/UNAVAILABLE",
+      "scenario_ids": [
+        "RVLAB-MCP-HANDOFF-01",
+        "mcp_handoff x5"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/create_handoff.rb, inspect_handoff.rb, verify_handoff.rb",
+      "status": "covered"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "single POL scenario mentions the tool; needs DEEP parity in D10",
+      "obligation_id": "O-MCP-POLICY",
+      "positive": true,
+      "public_contract": "get_engineering_policy returns same readiness as CLI policy",
+      "scenario_ids": [
+        "RVLAB-POL-12",
+        "mcp_policy x1",
+        "policy_drift x1",
+        "policy_determinism x1"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/get_engineering_policy.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "CLI paths covered; MCP tool paths need explicit parity scenarios in D10",
+      "obligation_id": "O-MCP-REVIEW",
+      "positive": true,
+      "public_contract": "get_review_packet/verify_review_observation/create_workflow_receipt parity with review CLI",
+      "scenario_ids": [
+        "RVLAB-WF-10",
+        "mcp_review x1"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/tools/get_review_packet.rb, verify_review_observation.rb, create_workflow_receipt.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "mcp",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "long sessions and cache isolation across projects exercised lightly; D10 matrix",
+      "obligation_id": "O-MCP-SESSION",
+      "positive": true,
+      "public_contract": "session reuse, repeated calls, no cross-project cache contamination",
+      "scenario_ids": [
+        "mcp category",
+        "determinism x2"
+      ],
+      "source_ref": "lib/rail_verdict/mcp/cache.rb, server.rb mutex",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "critical covered; high-forbid needs DEEP scenario in D08",
+      "obligation_id": "O-POL-NEW-FINDINGS",
+      "positive": true,
+      "public_contract": "forbid introduced/changed/moved critical/high vs existing/waived; threshold adjacency",
+      "scenario_ids": [
+        "RVLAB-POL requirement_req-new-findings-critical x2"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:109-129",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "84/85/86 trio, 0/101 config rejection, stale/missing/zero-denominator need DEEP scenarios",
+      "obligation_id": "O-POL-COVERAGE",
+      "positive": true,
+      "public_contract": "changed_lines_minimum enforced with verifiable integer counts",
+      "scenario_ids": [
+        "requirement_req-coverage-changed-lines x3"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:135-155",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "unavailable/timeout/partial and unknown-analyzer variants need DEEP scenarios",
+      "obligation_id": "O-POL-ANALYZERS",
+      "positive": true,
+      "public_contract": "per-surface require_analyzers incl. missing/disabled/timeout handling",
+      "scenario_ids": [
+        "RVLAB-POL-0x rspec/brakeman/bundler_audit requirements"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "TARGETED-insufficient vs FULL-sufficient pair needs DEEP scenario",
+      "obligation_id": "O-POL-SCOPE",
+      "positive": true,
+      "public_contract": "verification_scope full rejects TARGETED execution",
+      "scenario_ids": [
+        "RVLAB-POL req-full-scope-models/migration"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:179-231",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "baseline_compatible requirement row thinly covered",
+      "obligation_id": "O-POL-BASELINE-COMPAT",
+      "positive": true,
+      "public_contract": "req-baseline-compatible in no_new_debt/strict deltas",
+      "scenario_ids": [
+        "RVLAB-POL series"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:245-251",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "migration trigger proven; per-level/area matrix needs D08 expansion",
+      "obligation_id": "O-POL-HUMAN-REVIEW",
+      "positive": true,
+      "public_contract": "human_review required persists across valid observations; never approval",
+      "scenario_ids": [
+        "RVLAB-POL-10 (exit 3)",
+        "requirement_req-human-review-high"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:260-294",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "gate_mirror emits no requirement row (decide() mirrors implicitly); mappers must not expect req-gate-*",
+      "obligation_id": "O-POL-GATE-MIRROR",
+      "positive": true,
+      "public_contract": "no violated/unavailable/review_required mirrors gate into decision",
+      "scenario_ids": [
+        "RVLAB-POL series (implicit)"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:300-313",
+      "status": "not_applicable"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "drift-after-handoff pair needs DEEP scenario in D08",
+      "obligation_id": "O-POL-DRIFT",
+      "positive": true,
+      "public_contract": "policy drift fresh/policy_drift/unavailable without relabeling v1 documents",
+      "scenario_ids": [
+        "policy_drift x1"
+      ],
+      "source_ref": "lib/rail_verdict/engineering_policy.rb:50-52",
+      "status": "partial"
+    },
+    {
+      "capability": "engineering_policy",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "compat matrix (1.0-1.6 configs behave identically) needs DEEP scenarios",
+      "obligation_id": "O-POL-COMPAT",
+      "positive": true,
+      "public_contract": "configs without new rules yield all requirements not_applicable; check/pr unchanged",
+      "scenario_ids": [
+        "RVLAB-01..09 (implicitly, via not_applicable)"
+      ],
+      "source_ref": "docs/engineering-policy.md Migration",
+      "status": "partial"
+    },
+    {
+      "capability": "review_workflow",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "",
+      "obligation_id": "O-REV-PACKET",
+      "positive": true,
+      "public_contract": "ReviewPacket deterministic/review lanes, packet_id stability, bounds",
+      "scenario_ids": [
+        "RVLAB-WF-01..07",
+        "RVLAB-WF-10",
+        "review_determinism x1"
+      ],
+      "source_ref": "schemas/review-packet-v1.schema.json",
+      "status": "covered"
+    },
+    {
+      "capability": "review_workflow",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "unavailable status has no scenario; needs DEEP case",
+      "obligation_id": "O-REV-OBSERVATION",
+      "positive": true,
+      "public_contract": "observation validation valid_bound/stale/untrusted/invalid/unavailable; author binding; no gate effect",
+      "scenario_ids": [
+        "observation_status valid_bound/stale/invalid/untrusted (4 scenarios)"
+      ],
+      "source_ref": "lib/rail_verdict/review_observation.rb:55-93",
+      "status": "partial"
+    },
+    {
+      "capability": "review_workflow",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "blocked_by_evidence has no scenario; needs DEEP case",
+      "obligation_id": "O-REV-RECEIPT",
+      "positive": true,
+      "public_contract": "WorkflowReceipt ready/blocked_by_gate/blocked_by_evidence/review_pending with exits 0/1/2/3",
+      "scenario_ids": [
+        "readiness ready/blocked_by_gate/review_pending (3)",
+        "RVLAB-WF-08 (exit 3)"
+      ],
+      "source_ref": "lib/rail_verdict/workflow_receipt.rb:61-72",
+      "status": "partial"
+    },
+    {
+      "capability": "review_workflow",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "DEEP-POL-001 exemplar planned in D09",
+      "obligation_id": "O-REV-NO-APPROVAL",
+      "positive": true,
+      "public_contract": "valid observation (even human 'approved') never clears review_required",
+      "scenario_ids": [
+        "RVLAB-WF-08 (review_pending persists)"
+      ],
+      "source_ref": "docs/review-workflow.md; ADR 0021 S5",
+      "status": "partial"
+    },
+    {
+      "capability": "pr_intelligence",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "10 scenarios for 19 surfaces; per-surface positive+near-miss+mixed matrix needs DEEP expansion in D07",
+      "obligation_id": "O-CI-SURFACES",
+      "positive": true,
+      "public_contract": "19 Rails change surfaces with detected/inferred/mixed evidence tiers",
+      "scenario_ids": [
+        "RVLAB-CI-01..10"
+      ],
+      "source_ref": "lib/rail_verdict/change_intelligence.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "pr_intelligence",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "risk-level reachability and override precedence need DEEP truth tables",
+      "obligation_id": "O-CI-RISK",
+      "positive": true,
+      "public_contract": "LOW/MEDIUM/HIGH/CRITICAL with reason codes; sensitive areas; overrides; unknown stays unknown",
+      "scenario_ids": [
+        "RVLAB-CI series",
+        "ci-01..10 fixture branches"
+      ],
+      "source_ref": "docs/engineering-policy.md Rules; config 1.6 review.*",
+      "status": "partial"
+    },
+    {
+      "capability": "pr_intelligence",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "single unmapped case; 9/10/11-path bounds and mixed mapped/unmapped need DEEP scenarios (1.8.2 regression)",
+      "obligation_id": "O-CI-UNMAPPED",
+      "positive": true,
+      "public_contract": "unsurfaced paths yield one bounded unmapped entry (<=10 paths, ranked last, no risk inflation)",
+      "scenario_ids": [
+        "RVLAB-WF-12 (focus_surface_present: unmapped)"
+      ],
+      "source_ref": "CHANGELOG 1.8.2; lib/rail_verdict/change_intelligence.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "pr_intelligence",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "ranking recall corpus is D07 work, not catalog coverage",
+      "obligation_id": "O-CI-FOCUS",
+      "positive": true,
+      "public_contract": "Review Focus ranking, ties, bounds, dedup, no hallucinated paths",
+      "scenario_ids": [
+        "RVLAB-CI series (focus_surface_present x1)"
+      ],
+      "source_ref": "lib/rail_verdict/pr_intelligence.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "analyzers",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "fault matrix (crash/timeout/malformed/version) per adapter needs DEEP completion in D04",
+      "obligation_id": "O-AN-RUBOCOP-RSPEC-MINITEST",
+      "positive": true,
+      "public_contract": "real RuboCop/RSpec/Minitest accept+reject with severity/rule/path fidelity",
+      "scenario_ids": [
+        "RVLAB-03/04/05",
+        "analyzers (6)",
+        "RH series"
+      ],
+      "source_ref": "lib/rail_verdict/analyzers/",
+      "status": "partial"
+    },
+    {
+      "capability": "analyzers",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "DB absent/stale transitions per contract need DEEP cases",
+      "obligation_id": "O-AN-SIMPLECOV-AUDIT-BRAKEMAN",
+      "positive": true,
+      "public_contract": "SimpleCov native+canonical, bundler-audit vuln/clean with pinned DB, Brakeman exits 0/3/crash-distinct",
+      "scenario_ids": [
+        "simplecov (3)",
+        "RVLAB-15-BRAKEMAN x2",
+        "RVLAB-07"
+      ],
+      "source_ref": "lib/rail_verdict/analyzers/",
+      "status": "partial"
+    },
+    {
+      "capability": "analyzers",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "documented as deferred; must stay absent, not faked",
+      "obligation_id": "O-AN-DB-CONSISTENCY",
+      "positive": false,
+      "public_contract": "database_consistency deferred: no structured contract, no fake analyzer",
+      "scenario_ids": [],
+      "source_ref": "CHANGELOG 1.5",
+      "status": "not_applicable"
+    },
+    {
+      "capability": "git",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "rename/unicode/binary covered; staged-vs-unstaged split and empty-tree need DEEP cases",
+      "obligation_id": "O-GIT-SCOPE",
+      "positive": true,
+      "public_contract": "changed-scope enumeration incl. renames, unicode, binary, special names; diff failure never empty diff",
+      "scenario_ids": [
+        "RVLAB-10 (git edge)",
+        "git_changed_scope (2)"
+      ],
+      "source_ref": "lib/rail_verdict/ (git state identity)",
+      "status": "partial"
+    },
+    {
+      "capability": "receipts",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "TOCTOU guards and env-dimension races need DEEP deterministic barriers in D05",
+      "obligation_id": "O-GIT-IDENTITY-RECEIPT",
+      "positive": true,
+      "public_contract": "repository state identity; freshness fresh/stale/invalid/unavailable; portability; no signature claims",
+      "scenario_ids": [
+        "agent (15)",
+        "freshness (7)",
+        "portability (4)",
+        "receipt (5)",
+        "environment (8)"
+      ],
+      "source_ref": "docs/adr/0016,0017,0018",
+      "status": "covered"
+    },
+    {
+      "capability": "handoff",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "per-analyzer predicates and partial-reuse refusal need DEEP matrix in D06",
+      "obligation_id": "O-REUSE",
+      "positive": true,
+      "public_contract": "whole-set and tiered reuse; RECEIPT_FRESH != EVIDENCE_REUSABLE; reuse is execution avoidance with wrapper proof",
+      "scenario_ids": [
+        "RVLAB-MCP-HANDOFF-01",
+        "mcp_handoff x5",
+        "test_selection x2"
+      ],
+      "source_ref": "docs/adr/0019; docs/agent-handoff.md",
+      "status": "partial"
+    },
+    {
+      "capability": "selection",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "lib/ mapping fixed in 1.8.1 needs explicit RSpec+Minitest regression pair (DEEP in D06)",
+      "obligation_id": "O-SELECTION",
+      "positive": true,
+      "public_contract": "targeted mapping per convention + FULL fallback classes; lib/ regression 1.8.1",
+      "scenario_ids": [
+        "RVLAB-15-TARGETED x2",
+        "test_selection x2"
+      ],
+      "source_ref": "lib/rail_verdict/rails_context/resolvers/test_candidates.rb",
+      "status": "partial"
+    },
+    {
+      "capability": "repair",
+      "evidence_refs": [],
+      "integration": true,
+      "limitation": "waiver-vs-repair (DEEP-REPAIR-001) exemplar is D09 work",
+      "obligation_id": "O-REPAIR",
+      "positive": true,
+      "public_contract": "packet -> minimal fix -> verify; waiver/config weakening surfaces boundary_changed, never successful",
+      "scenario_ids": [
+        "repair_anti_cheating (3)",
+        "repair (6)",
+        "mcp_repair x4",
+        "RVLAB-16"
+      ],
+      "source_ref": "lib/rail_verdict/repair/",
+      "status": "covered"
+    },
+    {
+      "capability": "config",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "unknown version/key, mistype, bad YAML, enabled-required invariant all INCOMPLETE/2",
+      "obligation_id": "O-CONFIG",
+      "positive": true,
+      "public_contract": "config versions 1-1.7 load; unknown keys/types/limits rejected without false gates",
+      "scenario_ids": [
+        "DEEP-CLI-CFG-01..05"
+      ],
+      "source_ref": "schemas/configuration-v1*.schema.json",
+      "status": "covered"
+    },
+    {
+      "capability": "env",
+      "evidence_refs": [],
+      "integration": false,
+      "limitation": "canonical env is local+CI ubuntu; min-rails/ruby pins and analyzer drift (rubocop 1.90 vs 1.89, simplecov 1.2 vs 1.0) are D11 items",
+      "obligation_id": "O-ENV",
+      "positive": true,
+      "public_contract": "canonical environment execution; compat matrix min/current; no invented platforms",
+      "scenario_ids": [
+        "environment (8)",
+        "compatibility.yml (manual)"
+      ],
+      "source_ref": "lab/candidate.yml; docs/deep-certification/candidate.lock.json",
+      "status": "partial"
+    }
+  ]
+}

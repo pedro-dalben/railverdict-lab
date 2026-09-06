@@ -384,6 +384,54 @@ def repair_verify_flow(candidate, work_dir, fix_content, target_path = "bad.rb")
     "policy_status" => "pass", "exit_code" => verify_status.exitstatus,
     "overall_status" => result["overall_status"] }
 end
+def explain_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "explain flow check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  document = LabSupport.json_strict(check_out)
+  finding = Array(document["findings"]).find { |item| item.is_a?(Hash) && item["state"] == "introduced" }
+  raise "explain flow found no introduced finding" if finding.nil?
+  ref = (finding["id"] || finding["fingerprint"]).to_s
+  out, err, status = LabSupport.product_run(candidate, ["explain", ref, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "explain-check.json"), check_out)
+  File.write(result_path(artifact_dir, "explain-result.json"), out)
+  File.write(result_path(artifact_dir, "explain-diagnostics.log"), err)
+  begin
+    payload = LabSupport.json_strict(out)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  roundtrip = status.exitstatus == 0 && !payload.nil?
+  base = payload || { "lab_error" => "explain_stdout_unparseable" }
+  base["lab_result"] = { "explain_roundtrip" => roundtrip, "finding_ref" => ref }
+  base["lab_stdout_empty"] = out.empty?
+  base["lab_stdout_excerpt"] = out.byteslice(0, 4000)
+  base["lab_stderr_excerpt"] = err.byteslice(0, 2000)
+  base["lab_stdout_keys"] = base.keys
+  base.merge("exit_code" => status.exitstatus)
+end
+
+def handoff_flow(candidate, work_dir, artifact_dir)
+  out, err, status = LabSupport.product_run(candidate, ["handoff", "create", "--format", "json"], cwd: work_dir)
+  raise "handoff create failed: #{err[0, 300]}" unless status.exitstatus == 0
+  created = LabSupport.json_strict(out)
+  raise "handoff create returned no handoff_id" unless created.is_a?(Hash) && created["handoff_id"]
+  path = result_path(artifact_dir, "lab-handoff.json")
+  File.write(path, out)
+  out2, err2, status2 = LabSupport.product_run(candidate, ["handoff", "inspect", path, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "lab-handoff-inspect.json"), out2)
+  File.write(result_path(artifact_dir, "lab-handoff-inspect-diagnostics.log"), err2)
+  inspected = LabSupport.json_strict(out2)
+  roundtrip = status2.exitstatus == 0 && inspected.is_a?(Hash) && inspected["handoff_id"] == created["handoff_id"]
+  base = inspected.is_a?(Hash) ? inspected : { "lab_error" => "inspect_unparseable" }
+  base["lab_result"] = { "handoff_roundtrip" => roundtrip, "handoff_id" => created["handoff_id"] }
+  base["lab_stdout_empty"] = out2.empty?
+  base["lab_stdout_excerpt"] = out2.byteslice(0, 4000)
+  base["lab_stderr_excerpt"] = err2.byteslice(0, 2000)
+  base["lab_stdout_keys"] = base.keys
+  base.merge("exit_code" => status2.exitstatus)
+end
+
 
 def mcp_review(candidate, work_dir, base)
   base_sha = LabSupport.git(work_dir, "rev-parse", base).first.to_s.strip
@@ -1038,6 +1086,10 @@ selected.each do |scenario|
                   review_observe_complete(candidate, work_dir, command.fetch("base", "main"))
                 when "repair_verify_flow"
                   repair_verify_flow(candidate, work_dir, command.fetch("fix_content"))
+                when "explain_flow"
+                  explain_flow(candidate, work_dir, artifact_dir)
+                when "handoff_flow"
+                  handoff_flow(candidate, work_dir, artifact_dir)
                 when "mcp_review"
                   mcp_review(candidate, work_dir, command.fetch("base", "main"))
                 when "review_determinism"
