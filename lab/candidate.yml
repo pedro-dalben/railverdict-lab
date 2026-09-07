@@ -1,16 +1,16 @@
 schema_version: '2.0'
 catalog_version: '5.0'
 candidate:
-  mode: local_build
+  mode: published
   gem_name: rail_verdict
   gem_version: 1.8.3
   repository: https://github.com/pedro-dalben/RailVerdict.git
   source_sha: 8e41472706679df7c2bf068824058f028e221ced
   source_branch: fix/1.8.3-cli-surface
   tag: null
-  gem_sha256: 6ed0275ce602cffd1172f2fc3444c6aa731325be6b15c187d9778a15f3bf19ad
+  gem_sha256: b923b3ccc86889b80c52bce4600d7b2ffe21243a5a4aa84cb5a8ce4435ccbb77
   gem_file: RailVerdict/rail_verdict-1.8.3.gem
-  frozen_at: '2026-09-06T21:45:00Z'
+  frozen_at: '2026-09-07T12:00:00Z'
   scenario_catalog_version: '5.0'
 environment:
   ruby_version: 3.4.5
