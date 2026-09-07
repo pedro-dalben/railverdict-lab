@@ -58,8 +58,11 @@ o oráculo estrito expôs, foram reescritas para campos reais e passam.
 
 ## 4. O que continua limitado, bloqueado ou fora do escopo
 
-- **Distribuição:** `LOCAL_CANDIDATE_ONLY` — 1.8.3 não publicada; CI segue
-  vermelho no fetch até publicar (decisão do mantenedor).
+- **Distribuição (atualizado pós-deploy):** `PUBLISHED_ARTIFACT_VERIFIED` para
+  identidade de código — a 1.8.3 publicada (SHA `b923b3cc…`) foi diffada
+  byte-idêntica (`lib/`, `exe/`, `schemas/`) contra o commit travado
+  `8e41472`; a evidência de execução pertence ao build local do mesmo
+  commit. CI do Lab resolve o artefato publicado e passa.
 - Real Brakeman ausente do bundle do lab (aceitação via simulados +
   indisponível; transição de revisão do DB de advisories não testada).
 - Grandchild reaping de timeout não provado; lock é exclusão mútua.
@@ -75,8 +78,8 @@ o oráculo estrito expôs, foram reescritas para campos reais e passam.
   escopo declarado comprovadas no candidato final, harness aprovado em
   todos os mutantes obrigatórios, rodada final íntegra 245/245, zero
   defeitos contratuais conhecidos escondidos.
-- **Distribuição: `LOCAL_CANDIDATE_ONLY`** — certificação técnica do
-  artefato local; publicação é verificação separada.
+- **Distribuição: `PUBLISHED_ARTIFACT_VERIFIED`** (identidade de código;
+  ver seção 4) — a campanha executou contra build local do mesmo commit.
 
 ## 6. Índice de evidências (paths no branch de campanha)
 
