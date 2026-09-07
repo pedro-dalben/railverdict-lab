@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "count": 230,
+    "count": 245,
     "header": "5.0",
     "source_sha_pinned": "campaign branch lab/deep-cert-1.8.2"
   },
@@ -256,16 +256,16 @@
       "capability": "cli",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "",
+      "limitation": "CLI verify exercised with TOCTOU inside handoff flows",
       "obligation_id": "O-CLI-HANDOFF-VERIFY",
       "positive": true,
       "public_contract": "handoff verify REUSABLE 0 else 2 with TOCTOU re-observe",
       "scenario_ids": [
-        "RVLAB-MCP-HANDOFF-01 (tool path)",
-        "handoff flow step"
+        "RVLAB-MCP-HANDOFF-01 (shells CLI handoff verify)",
+        "DEEP-MCP-PAR-01"
       ],
       "source_ref": "lib/rail_verdict/cli.rb:1244-1297",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "mcp",
@@ -667,15 +667,16 @@
       "capability": "pr_intelligence",
       "evidence_refs": [],
       "integration": false,
-      "limitation": "6/18 surfaces with tiers; remaining 12 carried",
+      "limitation": "18/18 positive with evidence; tiers asserted for all 18 (detected/inferred/mixed); near-miss + mixed exemplar_rx for auth/security; remaining near-miss breadth carried as minor",
       "obligation_id": "O-CI-SURFACES",
       "positive": true,
       "public_contract": "19 Rails change surfaces with detected/inferred/mixed evidence tiers",
       "scenario_ids": [
-        "DEEP-CI-SURF-01..04"
+        "DEEP-CI-SURF-01..04",
+        "DEEP-CI-M01..M14"
       ],
       "source_ref": "lib/rail_verdict/change_intelligence.rb",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "pr_intelligence",
@@ -766,16 +767,17 @@
       "capability": "git",
       "evidence_refs": [],
       "integration": true,
-      "limitation": "empty-tree verification carried",
+      "limitation": "rename/unicode/binary/split/empty-tree",
       "obligation_id": "O-GIT-SCOPE",
       "positive": true,
       "public_contract": "changed-scope enumeration incl. renames, unicode, binary, special names; diff failure never empty diff",
       "scenario_ids": [
         "DEEP-GIT-SPLIT-01",
+        "DEEP-GIT-EMPTY-01",
         "RVLAB-10"
       ],
       "source_ref": "lib/rail_verdict/ (git state identity)",
-      "status": "partial"
+      "status": "covered"
     },
     {
       "capability": "receipts",

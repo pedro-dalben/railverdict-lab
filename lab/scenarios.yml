@@ -7264,3 +7264,508 @@ scenarios:
   - fast
   - refusal
   - adversarial
+- id: DEEP-CI-M01
+  title: authentication change reports the authentication surface
+  category: pr_intelligence
+  description: Touching config/initializers/devise.rb marks surface authentication
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m01
+    operations:
+    - name: write
+      path: config/initializers/devise.rb
+      content: "# synthetic devise marker\n"
+    - name: commit
+      message: surface authentication fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authentication_changed: true
+    surface_authentication_detection: inferred
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M02
+  title: database change reports the database surface
+  category: pr_intelligence
+  description: Touching db/schema.rb marks surface database changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m02
+    operations:
+    - name: write
+      path: db/schema.rb
+      content: "# synthetic schema marker\n"
+    - name: commit
+      message: surface database fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_database_changed: true
+    surface_database_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M03
+  title: public_api change reports the public_api surface
+  category: pr_intelligence
+  description: Touching app/controllers/api/health_controller.rb marks surface public_api
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m03
+    operations:
+    - name: write
+      path: app/controllers/api/health_controller.rb
+      content: |
+        module Api
+          class HealthController < ApplicationController
+            def show
+              head :ok
+            end
+          end
+        end
+    - name: commit
+      message: surface public_api fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_public_api_changed: true
+    surface_public_api_detection: inferred
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M04
+  title: background_jobs change reports the background_jobs surface
+  category: pr_intelligence
+  description: Touching app/jobs/recall_job.rb marks surface background_jobs changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m04
+    operations:
+    - name: write
+      path: app/jobs/recall_job.rb
+      content: |
+        class RecallJob < ApplicationJob
+        end
+    - name: commit
+      message: surface background_jobs fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_background_jobs_changed: true
+    surface_background_jobs_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M05
+  title: controllers change reports the controllers surface
+  category: pr_intelligence
+  description: Touching app/controllers/health_controller.rb marks surface controllers
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m05
+    operations:
+    - name: write
+      path: app/controllers/health_controller.rb
+      content: |
+        class HealthController < ApplicationController
+          def show
+            head :ok
+          end
+        end
+    - name: commit
+      message: surface controllers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_controllers_changed: true
+    surface_controllers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M06
+  title: models change reports the models surface
+  category: pr_intelligence
+  description: Touching app/models/order.rb marks surface models changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m06
+    operations:
+    - name: append
+      path: app/models/order.rb
+      content: |2
+
+        # deep models touch
+    - name: commit
+      message: surface models fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_models_changed: true
+    surface_models_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M07
+  title: views change reports the views surface
+  category: pr_intelligence
+  description: Touching app/views/orders/show_extra.html.erb marks surface views changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m07
+    operations:
+    - name: write
+      path: app/views/orders/show_extra.html.erb
+      content: "<!-- deep views marker -->\n"
+    - name: commit
+      message: surface views fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_views_changed: true
+    surface_views_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M08
+  title: mailers change reports the mailers surface
+  category: pr_intelligence
+  description: Touching app/mailers/recall_mailer.rb marks surface mailers changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m08
+    operations:
+    - name: write
+      path: app/mailers/recall_mailer.rb
+      content: |
+        class RecallMailer
+          def self.preview
+            "preview"
+          end
+        end
+    - name: commit
+      message: surface mailers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_mailers_changed: true
+    surface_mailers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M09
+  title: storage change reports the storage surface
+  category: pr_intelligence
+  description: Touching config/storage_lab.yml marks surface storage changed with
+    evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m09
+    operations:
+    - name: write
+      path: config/storage_lab.yml
+      content: "# deep storage marker\n"
+    - name: commit
+      message: surface storage fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_storage_changed: true
+    surface_storage_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M10
+  title: initializers change reports the initializers surface
+  category: pr_intelligence
+  description: Touching config/initializers/lab_probe_init.rb marks surface initializers
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m10
+    operations:
+    - name: write
+      path: config/initializers/lab_probe_init.rb
+      content: "# synthetic initializer marker\n"
+    - name: commit
+      message: surface initializers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_initializers_changed: true
+    surface_initializers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M11
+  title: configuration change reports the configuration surface
+  category: pr_intelligence
+  description: Touching config/application.rb marks surface configuration changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m11
+    operations:
+    - name: append
+      path: config/application.rb
+      content: |2
+
+        # deep configuration touch
+    - name: commit
+      message: surface configuration fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_configuration_changed: true
+    surface_configuration_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M12
+  title: test_infrastructure change reports the test_infrastructure surface
+  category: pr_intelligence
+  description: Touching spec/spec_helper.rb marks surface test_infrastructure changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m12
+    operations:
+    - name: append
+      path: spec/spec_helper.rb
+      content: |2
+
+        # deep test infra touch
+    - name: commit
+      message: surface test_infrastructure fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_test_infrastructure_changed: true
+    surface_test_infrastructure_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M13
+  title: shared_infrastructure change reports the shared_infrastructure surface
+  category: pr_intelligence
+  description: Touching config/boot.rb marks surface shared_infrastructure changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m13
+    operations:
+    - name: append
+      path: config/boot.rb
+      content: |2
+
+        # deep shared infra touch
+    - name: commit
+      message: surface shared_infrastructure fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_shared_infrastructure_changed: true
+    surface_shared_infrastructure_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M14
+  title: routes change reports the routes surface
+  category: pr_intelligence
+  description: Touching config/routes.rb marks surface routes changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m14
+    operations:
+    - name: append
+      path: config/routes.rb
+      content: |2
+
+        # deep routes touch
+    - name: commit
+      message: surface routes fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_routes_changed: true
+    surface_routes_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-GIT-EMPTY-01
+  title: unborn HEAD fails closed with an incomplete verdict
+  category: git_changed_scope
+  description: A repository with no commits yields INCOMPLETE/incomplete exit 2 and a verdict document, never a crash or an empty diff treated as clean.
+  setup:
+    strategy: fresh
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: write
+      path: app.rb
+      content: "x = 1\n"
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - git-changed-scope
+  - empty-tree
