@@ -49,8 +49,14 @@ def evaluate(scenario, actual, exit_code)
   expected = expected_for(scenario)
   product = actual["product_result"].is_a?(Hash) ? actual["product_result"] : actual
   effective_exit = actual.key?("exit_code") ? actual["exit_code"] : exit_code
-  actual_gate = product["gate"] || product.dig("gate_result", "gate") || actual["gate"] || "UNKNOWN"
-  actual_completion = product["completion_status"] || product.dig("gate_result", "completion_status") || actual["completion_status"] || "UNKNOWN"
+  actual_gate = product["gate"] || product.dig("gate_result", "gate") ||
+    product.dig("deterministic", "verification", "gate") || actual["gate"] || "UNKNOWN"
+  actual_completion = product["completion_status"] || product.dig("gate_result", "completion_status") ||
+    product.dig("deterministic", "verification", "completion_status") || actual["completion_status"]
+  if actual_completion.nil? && product.key?("readiness")
+    actual_completion = product["gate"] == "INCOMPLETE" ? "incomplete" : "complete"
+  end
+  actual_completion ||= "UNKNOWN"
   actual_policy = product["policy_status"] || product.dig("gate_result", "policy_status") || actual["policy_status"] || "UNKNOWN"
   checks = []
 
@@ -111,8 +117,30 @@ def evaluate(scenario, actual, exit_code)
     checks << { "name" => "quality_delta_available", "expected" => expected["quality_delta_available"], "actual" => available, "matched" => available == expected["quality_delta_available"] }
   end
 
+  expected.each do |key, expectation|
+    next unless key.start_with?("requirement_")
+    requirement_id = key.sub(/\Arequirement_/, "")
+    requirements = Array(product["requirements"])
+    entry = requirements.find { |item| item["id"] == requirement_id }
+    actual_value = entry ? entry["status"] : "missing"
+    checks << { "name" => key, "expected" => expectation, "actual" => actual_value, "matched" => actual_value == expectation }
+  end
+
+  if expected.key?("observation_status")
+    first = Array(product["observations"]).first || {}
+    actual_value = first["status"] || "missing"
+    checks << { "name" => "observation_status", "expected" => expected["observation_status"], "actual" => actual_value, "matched" => actual_value == expected["observation_status"] }
+  end
+
+  if expected.key?("focus_surface_present")
+    focus = Array(product["review_focus"]) + Array(product.dig("review", "focus"))
+    surfaces = focus.map { |item| item["surface"] }
+    matched = surfaces.include?(expected["focus_surface_present"])
+    checks << { "name" => "focus_surface_present", "expected" => expected["focus_surface_present"], "actual" => surfaces, "matched" => matched }
+  end
+
   special = actual["lab_result"].is_a?(Hash) ? actual["lab_result"] : actual
-  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available]
+  ignored = %w[gate completion_status policy_status exit_code introduced_min introduced_max introduced_count existing_min existing_max existing_count waived_min waived_max waived_count resolved_min resolved_max resolved_count changed_paths_min analyzer analyzer_status execution_status evidence_status analyzer_status_all decision_reason quality_delta_available observation_status]
   expected.each do |key, expectation|
     next if ignored.include?(key)
     next unless special.key?(key) || product.key?(key)

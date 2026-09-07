@@ -1,0 +1,8 @@
+version: 1.3
+mode: no_new_debt
+analyzers:
+  rubocop: { enabled: true, required: true }
+  rspec: { enabled: false, required: false }
+  minitest: { enabled: false, required: false }
+  simplecov: { enabled: false, required: false }
+  bundler_audit: { enabled: false, required: false }
