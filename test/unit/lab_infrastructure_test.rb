@@ -21,12 +21,16 @@ class LabInfrastructureTest < Minitest::Test
     end
   end
 
-  def test_candidate_is_an_exact_published_package_contract
+  def test_candidate_is_an_exact_package_contract
     candidate = @candidate.fetch("candidate")
-    assert_equal "published", candidate.fetch("mode")
+    assert_includes %w[published local_build], candidate.fetch("mode")
     assert_equal 64, candidate.fetch("gem_sha256").length
     assert_match(/\A[0-9a-f]{64}\z/, candidate.fetch("gem_sha256"))
     assert candidate["source_sha"].nil? || candidate["source_sha"].match?(/\A[0-9a-f]{40}\z/)
+    if candidate.fetch("mode") == "local_build"
+      assert_match(/\A[0-9a-f]{40}\z/, candidate.fetch("source_sha").to_s, "local builds pin an exact source commit")
+      assert candidate.fetch("gem_file"), "local builds name the exact gem file"
+    end
   end
 
   def test_catalog_is_versioned_and_complete
@@ -45,9 +49,19 @@ class LabInfrastructureTest < Minitest::Test
     refusal = @manifest.fetch("scenarios").select { |scenario| scenario["category"] == "refusal" }
     assert_operator refusal.length, :>=, 14
     refusal.each do |scenario|
-      assert_equal "INCOMPLETE", scenario.fetch("expected_gate"), scenario["id"]
-      assert_equal "incomplete", scenario.fetch("expected_completion"), scenario["id"]
-      assert_equal 2, scenario.fetch("expected_exit"), scenario["id"]
+      gate = scenario.fetch("expected_gate")
+      completion = scenario.fetch("expected_completion")
+      if gate == "UNKNOWN"
+        # Usage-error paths carry no verdict: they must judge exit plus
+        # lab-observed process facts instead of asserting nothing.
+        assert_equal "UNKNOWN", completion, scenario["id"]
+        facts = (scenario["expected"] || {}).keys
+        assert((facts & %w[stdout_empty stderr_contains stdout_contains stdout_keys_include]).any?, scenario["id"])
+      else
+        assert_equal "INCOMPLETE", gate, scenario["id"]
+        assert_equal "incomplete", completion, scenario["id"]
+      end
+      assert [2, 130].include?(scenario.fetch("expected_exit")), scenario["id"]
     end
   end
 
@@ -89,6 +103,12 @@ class LabInfrastructureTest < Minitest::Test
     assert_includes source, "explain"
     assert_includes source, "investigate"
     assert_includes source, ".bundle"
+  end
+  def test_mcp_protocol_conformance_covers_all_sixteen_tools
+    source = File.read(File.join(@root, "scripts", "lab_run"))
+    %w[get_engineering_policy get_review_packet verify_review_observation create_workflow_receipt].each do |tool|
+      assert_includes source, tool
+    end
   end
 
   def test_category_reports_are_scoped_to_the_current_run

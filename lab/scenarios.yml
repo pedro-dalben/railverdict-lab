@@ -1,6 +1,6 @@
 schema_version: '2.0'
-catalog_version: '4.1'
-description: External black-box validation contract for the RailVerdict candidate (1.4 Handoff & Evidence Reuse — whole-set, PER_ANALYZER_REUSE_DEFERRED) + RH-01..RH-10 hardening (132 scenarios).
+catalog_version: '5.0'
+description: External black-box validation contract for the RailVerdict candidate (1.8 Agent Workflow & Review Orchestration over 1.7 Engineering Policy, 1.6 Change Intelligence, 1.5 Brakeman/targeted/reuse, 1.4 Handoff whole-set reuse — 173 scenarios).
 check_changed: &id001
   interface: cli
   args:
@@ -4428,6 +4428,7 @@ scenarios:
         - filename: app/models/lab_policy.rb
           coverage:
             lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+
         - filename: .railverdict.yml
           coverage:
             lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
@@ -4882,7 +4883,11 @@ scenarios:
   expected_completion: complete
   expected_exit: 0
   expected:
-    decision: PASS
+    stdout_keys_include:
+    - packet_id
+    - deterministic
+    - review
+    - provenance
   cleanup: remove_worktree
   tags:
   - review
@@ -5060,7 +5065,7 @@ scenarios:
     - --format
     - json
   expected_gate: PASS
-  expected_completion: complete
+  expected_completion: UNKNOWN
   expected_exit: 0
   expected:
     readiness: ready
@@ -5101,7 +5106,7 @@ scenarios:
     - --format
     - json
   expected_gate: FAIL
-  expected_completion: complete
+  expected_completion: UNKNOWN
   expected_exit: 1
   expected:
     readiness: blocked_by_gate
@@ -5293,3 +5298,2474 @@ scenarios:
   tags:
   - review
   - workflow
+- id: DEEP-CLI-SARIF-01
+  title: doctor rejects sarif with a usage error
+  category: refusal
+  description: doctor --format sarif must fail closed (exit 2, empty stdout, usage on stderr) instead of silently rendering console.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - doctor
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-02
+  title: baseline create rejects sarif with a usage error
+  category: refusal
+  description: baseline create --format sarif must fail closed before any baseline write.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - baseline
+    - create
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-03
+  title: findings rejects sarif with a usage error
+  category: refusal
+  description: findings --format sarif must fail closed instead of silently rendering console.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - findings
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-04
+  title: explain rejects sarif before finding resolution
+  category: refusal
+  description: explain --format sarif must fail on the format before resolving the finding ref.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - explain
+    - rv:00000000000000000000
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-05
+  title: repair build rejects sarif before packet assembly
+  category: refusal
+  description: repair --format sarif must fail on the format before building any packet.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - repair
+    - rv:00000000000000000000
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+    stderr_contains: invalid --format
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-SARIF-06
+  title: check keeps a machine-readable sarif document
+  category: acceptance
+  description: check --format sarif on a clean tree stays exit 0 with top-level version and runs keys.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - sarif
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_keys_include:
+    - version
+    - runs
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-INV-01
+  title: investigate preview dispatches and returns manifests
+  category: acceptance
+  description: investigate --preview-context --format json exits 0 with a manifests document (regression for the undispatched command).
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - investigate
+    - --preview-context
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_keys_include:
+    - manifests
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CONSOLE-01
+  title: console check prints the passing gate word
+  category: acceptance
+  description: check --format console on a clean tree exits 0 and prints Gate PASS coherently with the JSON verdict.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - console
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_contains: 'Gate: PASS'
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CFG-01
+  title: unknown configuration version is incomplete
+  category: refusal
+  description: version 99 config yields INCOMPLETE/incomplete exit 2 with a configuration operational failure.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 99\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-02
+  title: unknown configuration key is incomplete
+  category: refusal
+  description: A bogus top-level config key yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nbogus_key: true\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-03
+  title: mistyped configuration value is incomplete
+  category: refusal
+  description: mode 42 (integer, not enum) yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: 42\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CONSOLE-02
+  title: console check prints the failing gate word
+  category: acceptance
+  description: check --format console with an introduced offense exits 1 and prints Gate FAIL.
+  setup:
+    strategy: clone
+    branch: lab/deep-console-fail
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - console
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 1
+  expected:
+    stdout_empty: false
+    stdout_contains: 'Gate: FAIL'
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-CFG-04
+  title: unparseable configuration is incomplete
+  category: refusal
+  description: Invalid YAML yields INCOMPLETE/incomplete exit 2, never a gate.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "{{{\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-CFG-05
+  title: disabled-but-required analyzer invariant is incomplete
+  category: refusal
+  description: enabled false with required true violates the config invariant and yields INCOMPLETE/incomplete exit 2.
+  setup:
+    strategy: clone
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: false\n    required: true\n"
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-INT-01
+  title: SIGINT during verification exits 130 with a real interrupted verdict
+  category: refusal
+  description: Sending INT to a running check terminates it with exit 130 and a genuine INCOMPLETE verdict carrying the interrupted operational failure.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: interrupt
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 130
+  expected:
+    interrupted_exit_130: true
+  cleanup: remove_worktree
+  tags:
+  - refusal
+  - cli-surface
+- id: DEEP-CLI-EXP-01
+  title: explain round-trips a real introduced finding
+  category: acceptance
+  description: check surfaces an introduced offense and explain renders its document with exit 0.
+  setup:
+    strategy: clone
+    branch: lab/deep-explain
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end\n"
+    - name: commit
+  command:
+    interface: explain_flow
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    explain_roundtrip: true
+    stdout_empty: false
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-HO-01
+  title: handoff create and inspect round-trip on the CLI
+  category: acceptance
+  description: handoff create emits a document with the same handoff_id that handoff inspect reads back, both exit 0.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: handoff_flow
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    handoff_roundtrip: true
+    stdout_empty: false
+    stdout_keys_include:
+    - handoff_id
+    - receipt
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-GIT-SPLIT-01
+  title: staged-unstaged placement swap invalidates the receipt
+  category: freshness
+  description: Swapping which content sits in the index versus the worktree changes both digests, so the pre-swap receipt must verify stale with index and worktree reasons.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: receipt_swap
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    receipt_swap_stale: true
+  cleanup: remove_worktree
+  tags:
+  - freshness
+  - git-identity
+  - deep
+- id: DEEP-SEL-LIB-01
+  title: lib change with an RSpec candidate runs targeted without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with spec/lib/pricing_spec.rb present selects the candidate test and passes (1.8.1 crash regression).
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-rspec
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: spec/lib/pricing_spec.rb
+      content: "require \"spec_helper\"\nrequire_relative \"../../lib/pricing\"\n\nRSpec.describe Pricing do\n  it \"discounts\" do\n    expect(Pricing.discount(100)).to eq(90.0)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: replace
+      path: spec/lib/pricing_spec.rb
+      from: 'eq(90.0)'
+      to: 'eq(85.0)'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-LIB-02
+  title: lib change without a candidate falls back to full without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with no test candidate falls back to the full suite and passes (1.8.1 crash regression on the unmapped path).
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-nocand
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-LIB-03
+  title: lib change with a Minitest candidate runs targeted without crashing
+  category: test_selection
+  description: Changing lib/pricing.rb with test/lib/pricing_test.rb present selects the candidate Minitest file and passes.
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-lib-minitest
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  minitest:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: test/lib/pricing_test.rb
+      content: "require \"test_helper\"\nrequire_relative \"../../lib/pricing\"\n\nclass PricingTest < Minitest::Test\n  def test_discount\n    assert_equal 90.0, Pricing.discount(100)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.85'
+    - name: replace
+      path: test/lib/pricing_test.rb
+      from: 'assert_equal 90.0'
+      to: 'assert_equal 85.0'
+    - name: commit
+      message: selection change
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    analyzer: minitest
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-SEL-SEM-01
+  title: breaking a lib file without updating its test fails the targeted run
+  category: test_selection
+  description: Changing lib/pricing.rb behavior while leaving the candidate spec green-side up makes the targeted selection execute the mapped test and report FAIL, proving selection is not a vacuous pass.
+  setup:
+    strategy: clone
+    branch: lab/deep-sel-semantic
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: write
+      path: lib/pricing.rb
+      content: "module Pricing\n  def self.discount(total)\n    total * 0.9\n  end\nend\n"
+    - name: write
+      path: spec/lib/pricing_spec.rb
+      content: "require \"spec_helper\"\nrequire_relative \"../../lib/pricing\"\n\nRSpec.describe Pricing do\n  it \"discounts\" do\n    expect(Pricing.discount(100)).to eq(90.0)\n  end\nend\n"
+    - name: commit
+      message: selection base
+    - name: replace
+      path: lib/pricing.rb
+      from: 'total * 0.9'
+      to: 'total * 0.5'
+    - name: commit
+      message: selection breaks behavior
+  command:
+    interface: cli
+    args:
+    - check
+    - --changed
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: FAIL
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    analyzer: rspec
+    analyzer_status: succeeded
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - lib-mapping
+- id: DEEP-REUSE-01
+  title: static evidence reuses while dynamic tests execute fresh
+  category: test_selection
+  description: A transparent bundle wrapper counts subprocesses across a fresh check and a handoff-backed check. RuboCop analysis runs must drop to zero on reuse while RSpec analysis still executes, with identical gates.
+  setup:
+    strategy: clone
+    branch: lab/deep-reuse
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\n"
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: reuse fixture
+  command:
+    interface: reuse_proof
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    reuse_tiered: true
+  cleanup: remove_worktree
+  tags:
+  - test-selection
+  - evidence-reuse
+- id: DEEP-CI-SURF-01
+  title: policy and migration changes report detected surfaces and high risk
+  category: pr_intelligence
+  description: A policy file plus a migration yields detected authorization/migration surfaces, models untouched, HIGH risk, and a two-entry focus led by authorization.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-surf
+    operations:
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: write
+      path: db/migrate/20260906000001_add_deep_ci_surf.rb
+      content: "class AddDeepCiSurf < ActiveRecord::Migration[8.1]\n  def change\n    add_column :orders, :deep_ci_surf, :string\n  end\nend\n"
+    - name: commit
+      message: surfaces fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    surface_authorization_detection: detected
+    surface_migration_changed: true
+    surface_migration_detection: detected
+    surface_models_changed: false
+    risk_level: HIGH
+    focus_entry_count: 2
+    focus_first_surface: authorization
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-SURF-02
+  title: session-like lib file is an authentication near-miss with an unmapped pointer
+  category: pr_intelligence
+  description: lib/session_report.rb matches no authentication convention and no surface; authentication stays unchanged while focus carries one trailing unmapped entry.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-nearmiss
+    operations:
+    - name: write
+      path: lib/session_report.rb
+      content: "# unsurfaced session-like helper\n"
+    - name: commit
+      message: nearmiss fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authentication_changed: false
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-SURF-03
+  title: secret-adjacent initializer reports a mixed security surface at critical risk
+  category: pr_intelligence
+  description: A synthetic secret-named initializer (no secret content) triggers the mixed security surface and CRITICAL review risk with evidence.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-security
+    operations:
+    - name: write
+      path: config/initializers/secret_lab_rotate.rb
+      content: "# synthetic secret-adjacent initializer for surface detection\nRails.application.config.x.secret_lab = true\n"
+    - name: commit
+      message: security fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_security_changed: true
+    surface_security_detection: mixed
+    risk_level: CRITICAL
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-CI-RISK-01
+  title: per-surface risk override lowers the verdict level
+  category: pr_intelligence
+  description: review.risk authorization medium on a 1.6 config caps the verdict at MEDIUM and marks the risk configured.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-override
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  risk:\n    authorization: medium\n"
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: commit
+      message: risk override fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    risk_level: MEDIUM
+    risk_configured: true
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-RISK-02
+  title: named sensitive area fires its own signal and reason
+  category: pr_intelligence
+  description: A financial glob area containing the touched model reports changed with evidence and joins the HIGH risk reasons.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-area
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  sensitive_paths:\n    financial:\n      - app/models/order.rb\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep area touch\n"
+    - name: commit
+      message: risk area fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    sensitive_area_present: financial
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-RISK-03
+  title: unknown risk surface name is ignored without breaking the verdict
+  category: pr_intelligence
+  description: "An override naming a surface that does not exist changes nothing: the verdict still applies authorization defaults and exits 0. Documents lenient behavior."
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-risk-invalid
+    operations:
+    - name: config_replace
+      from: 'version: 1.3'
+      to: 'version: 1.6'
+    - name: append
+      path: .railverdict.yml
+      content: "\nreview:\n  risk:\n    nonexistent_surface: high\n"
+    - name: write
+      path: app/policies/order_policy.rb
+      content: "class OrderPolicy\n  def self.can_view?(user)\n    user.admin?\n  end\nend\n"
+    - name: commit
+      message: risk invalid fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - risk
+- id: DEEP-CI-UNMAP-09
+  title: 9 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (9 files) yields one trailing
+    unmapped Review Focus entry with 9 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-09
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: commit
+      message: unmapped fixture 9
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 9
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-10
+  title: 10 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (10 files) yields one
+    trailing unmapped Review Focus entry with 10 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-10
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: commit
+      message: unmapped fixture 10
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-11
+  title: 11 unsurfaced paths yield one bounded unmapped entry
+  category: pr_intelligence
+  description: A change touching only unsurfaced lib/ paths (11 files) yields one
+    trailing unmapped Review Focus entry with 10 paths and no risk inflation.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-11
+    operations:
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: write
+      path: lib/unmapped11.rb
+      content: "# unsurfaced helper 11\n"
+    - name: commit
+      message: unmapped fixture 11
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    focus_entry_count: 1
+    focus_first_surface: unmapped
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: LOW
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-UNMAP-MIX
+  title: mapped change outranks the capped unmapped pointer
+  category: pr_intelligence
+  description: A policy change plus 12 unsurfaced files yields authorization first
+    and one trailing unmapped entry capped at 10 paths.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-unmap-mix
+    operations:
+    - name: write
+      path: app/policies/order_policy.rb
+      content: |
+        class OrderPolicy
+          def self.can_view?(user)
+            user.admin?
+          end
+        end
+    - name: write
+      path: lib/unmapped01.rb
+      content: "# unsurfaced helper 1\n"
+    - name: write
+      path: lib/unmapped02.rb
+      content: "# unsurfaced helper 2\n"
+    - name: write
+      path: lib/unmapped03.rb
+      content: "# unsurfaced helper 3\n"
+    - name: write
+      path: lib/unmapped04.rb
+      content: "# unsurfaced helper 4\n"
+    - name: write
+      path: lib/unmapped05.rb
+      content: "# unsurfaced helper 5\n"
+    - name: write
+      path: lib/unmapped06.rb
+      content: "# unsurfaced helper 6\n"
+    - name: write
+      path: lib/unmapped07.rb
+      content: "# unsurfaced helper 7\n"
+    - name: write
+      path: lib/unmapped08.rb
+      content: "# unsurfaced helper 8\n"
+    - name: write
+      path: lib/unmapped09.rb
+      content: "# unsurfaced helper 9\n"
+    - name: write
+      path: lib/unmapped10.rb
+      content: "# unsurfaced helper 10\n"
+    - name: write
+      path: lib/unmapped11.rb
+      content: "# unsurfaced helper 11\n"
+    - name: write
+      path: lib/unmapped12.rb
+      content: "# unsurfaced helper 12\n"
+    - name: commit
+      message: unmapped fixture 12
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authorization_changed: true
+    focus_entry_count: 2
+    focus_first_surface: authorization
+    focus_last_surface: unmapped
+    focus_unmapped_paths_count: 10
+    risk_level: HIGH
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - unmapped-bounds
+- id: DEEP-CI-SURF-04
+  title: dependency manifest change reports the dependencies surface
+  category: pr_intelligence
+  description: A comment-only Gemfile touch marks the dependencies surface changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-dependencies
+    operations:
+    - name: append
+      path: Gemfile
+      content: "\n# deep-ci dependency note\n"
+    - name: commit
+      message: dependencies fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_dependencies_changed: true
+    risk_level: MEDIUM
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - change-surfaces
+- id: DEEP-POL-COV-84
+  title: coverage just below the minimum violates the requirement
+  category: engineering_policy
+  description: 11 of 14 changed lines covered (78.57%) with minimum 84 violates the requirement and fails the decision.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 84\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-coverage-changed-lines: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-85
+  title: coverage just above the minimum satisfies the requirement
+  category: engineering_policy
+  description: 12 of 14 changed lines covered (85.71%) with minimum 85 satisfies the requirement and the decision mirrors the gate.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 85\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-coverage-changed-lines: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-86
+  title: coverage below a raised minimum violates the requirement
+  category: engineering_policy
+  description: The same 85.71% evidence with minimum 86 violates the requirement, proving the threshold is strict.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-coverage-changed-lines: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-COV-ABOVE
+  title: coverage clearly above the minimum satisfies the requirement
+  category: engineering_policy
+  description: 13 of 14 changed lines covered (92.86%) with minimum 86 satisfies the requirement.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-cov
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: lab policy base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-coverage-changed-lines: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - coverage-boundary
+- id: DEEP-POL-HIGH-01
+  title: introduced high-severity finding violates the forbid rule
+  category: engineering_policy
+  description: A high-confidence Brakeman SQL injection warning outside the changed scope (simulated analyzer output; real Brakeman is absent from the lab bundle) leaves the scope-sensitive gate at PASS while the scope-independent forbid rule fails the decision.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-high
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: strict\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  brakeman:\n    enabled: true\n    required: true\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  findings:\n    new_high: forbid\n"
+    - name: fake_bundle
+      analyzer: brakeman
+      behavior: brakeman_warnings
+    - name: write
+      path: app/controllers/search_controller.rb
+      content: "class SearchController < ApplicationController\n  def index\n    @orders = Order.where(\"status = '#{params[:status]}'\")\n  end\nend\n"
+    - name: commit
+      message: high severity fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 1
+  expected:
+    decision: FAIL
+    requirement_req-new-findings-high: violated
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - forbid-high
+- id: DEEP-POL-UNAVAIL-01
+  title: required analyzer that never executes is unavailable, never violated
+  category: engineering_policy
+  description: A models-surface rspec requirement with rspec disabled yields unavailable and INCOMPLETE instead of a fabricated failure.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-unavail
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  changes:\n    models:\n      require_analyzers:\n      - rspec\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep unavail touch\n"
+    - name: commit
+      message: unavail fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-analyzer-rspec-for-models: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - unavailable
+- id: DEEP-POL-CFG-01
+  title: zero coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum 0 fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 0\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-CFG-02
+  title: over-range coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum 101 fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 101\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-CFG-03
+  title: mistyped coverage minimum is a configuration error, not a rule
+  category: refusal
+  description: changed_lines_minimum high (string, not integer) fails closed with a usage error and no verdict document.
+  setup:
+    strategy: clone
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: high\n"
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - policy
+- id: DEEP-POL-HANDOFF-01
+  title: strengthened policy after handoff is re-evaluated, never reused stale
+  category: engineering_policy
+  description: A handoff created without a coverage rule, followed by a minimum-100 rule with no coverage evidence, re-verifies under the current policy to INCOMPLETE instead of replaying the old PASS.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-handoff
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: true\n    required: true\n  rspec:\n    enabled: true\n    required: true\ngit:\n  base: main\n"
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: handoff policy fixture
+  command:
+    interface: handoff_policy
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 2
+  expected:
+    decision: INCOMPLETE
+    requirement_req-coverage-changed-lines: unavailable
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - handoff-drift
+- id: DEEP-POL-COMPAT-01
+  title: oldest config version applies no new rules
+  category: engineering_policy
+  description: A version 1.0 configuration evaluates only mode-gated baseline machinery and mirrors the gate, with no new-rule requirements.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-compat
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.0\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep compat touch\n"
+    - name: commit
+      message: compat fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    decision: PASS
+    requirement_req-baseline-compatible: satisfied
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - compat
+- id: DEEP-POL-001
+  title: migration under human review stays pending after a bound observation
+  category: review_workflow
+  description: A migration triggering review_required keeps the workflow review_pending through a valid_bound human observation; the note never acts as approval.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-001
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  review:\n    high:\n      human_review: required\n"
+    - name: write
+      path: db/migrate/20260906000003_pol001.rb
+      content: "class AddPol001 < ActiveRecord::Migration[8.1]\n  def change\n    add_column :orders, :pol001, :string\n  end\nend\n"
+    - name: commit
+      message: migration review fixture
+  command:
+    interface: policy_migration
+  expected_gate: PASS
+  expected_completion: UNKNOWN
+  expected_exit: 3
+  expected:
+    readiness: review_pending
+    observation_status: valid_bound
+    policy_review_required: true
+    human_requirement_review_required: true
+    observation_bound: true
+    workflow_still_pending: true
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+  - human-review
+- id: DEEP-REPAIR-001
+  title: waiver and analyzer disablement are not repair
+  category: repair
+  description: "One packet verified across three clones: real code fix succeeds, valid waiver changes the boundary without success, disabled analyzer changes the boundary without success."
+  setup:
+    strategy: clone
+    branch: lab/deep-repair-trio
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end"
+    - name: commit
+      message: repair trio fixture
+  command:
+    interface: repair_trio
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    clone_a_successful: true
+    clone_b_waiver_not_repair: true
+    clone_c_disabled_not_repair: true
+  cleanup: remove_worktree
+  tags:
+  - repair
+  - anti-cheating
+- id: DEEP-MCP-001
+  title: projections do not rerun analyzers and stale state is refused
+  category: mcp
+  description: One MCP verify executes analyzers; findings, receipt, intelligence, and policy projections add zero analysis subprocesses; mutating a file turns the cached receipt into an explicit verification_required.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-projection
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: projection fixture
+  command:
+    interface: mcp_projection
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    verify_executed_analyzers: true
+    projections_reran_zero_analyzers: true
+    findings_ok: true
+    receipt_ok: true
+    stale_after_mutation: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - single-execution
+- id: DEEP-REV-001
+  title: incomplete policy evidence closes as blocked by evidence
+  category: review_workflow
+  description: A review complete over unavailable analyzer evidence yields blocked_by_evidence with exit 2 while the gate stays PASS.
+  setup:
+    strategy: clone
+    branch: lab/deep-rev-evidence
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  changes:\n    models:\n      require_analyzers:\n      - rspec\n"
+    - name: append
+      path: app/models/order.rb
+      content: "\n# deep evidence touch\n"
+    - name: commit
+      message: evidence fixture
+  command:
+    interface: cli
+    args:
+    - review
+    - complete
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    readiness: blocked_by_evidence
+  cleanup: remove_worktree
+  tags:
+  - review
+  - workflow
+- id: DEEP-MCP-PAR-01
+  title: CLI and MCP project the same policy packet and verification
+  category: mcp
+  description: On one green state, CLI policy/review/check and their MCP tools return identical decisions, digests, packet ids, gates, and finding counts.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-parity
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: false\n    required: false\n  simplecov:\n    enabled: true\n    required: true\ngit:\n  base: main\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 86\n"
+    - name: write
+      path: app/models/lab_policy.rb
+      content: "class LabPolicy\n  def a\n    1\n  end\n  def b\n    2\n  end\n  def c\n    3\n  end\nend\n"
+    - name: commit
+      message: parity base
+    - name: append
+      path: app/models/lab_policy.rb
+      content: "  def d\n    4\n  end\n"
+    - name: write_json
+      path: coverage/coverage.json
+      content:
+        version: '1.0'
+        timestamp: 1750000000
+        files:
+        - filename: app/models/lab_policy.rb
+          coverage:
+            lines: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+        - filename: .railverdict.yml
+          coverage:
+            lines: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    - name: commit
+      message: parity fixture
+  command:
+    interface: mcp_parity
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    policy_parity: true
+    packet_parity: true
+    verify_parity: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - parity
+- id: DEEP-MCP-SES-01
+  title: sibling project sessions stay isolated from each other
+  category: mcp
+  description: Two MCP sessions over equivalent clones verify independently, and mutating one project leaves the sibling receipt fresh.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-session
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def formatted_total\n    format('%.2f', total_amount)\n  end"
+    - name: write
+      path: spec/models/order_format_spec.rb
+      content: "require \"spec_helper\"\n\nRSpec.describe Order do\n  it \"formats the total\" do\n    expect(Order.new(total_amount: 50.0).formatted_total).to eq(\"50.00\")\n  end\nend\n"
+    - name: commit
+      message: session fixture
+  command:
+    interface: mcp_session
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    sessions_independent: true
+    sibling_unaffected: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - session
+- id: DEEP-CLI-FIND-01
+  title: findings exits zero on a completed failing gate
+  category: acceptance
+  description: findings --format json over an introduced offense exits 0 with a non-empty document even though the gate would fail.
+  setup:
+    strategy: clone
+    branch: lab/deep-find-zero
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end"
+    - name: commit
+      message: findings fixture
+  command:
+    interface: cli
+    args:
+    - findings
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_keys_include:
+    - findings
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-CLI-DOC-01
+  title: doctor console renders the doctor banner
+  category: acceptance
+  description: doctor --format console exits 0 and prints the console banner coherently with the JSON projection.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - doctor
+    - --format
+    - console
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 0
+  expected:
+    stdout_empty: false
+    stdout_contains: RailVerdict doctor
+  cleanup: remove_worktree
+  tags:
+  - acceptance
+  - cli-surface
+- id: DEEP-MCP-EXP-01
+  title: explain and investigate previews work over MCP
+  category: mcp
+  description: MCP explain and investigate with preview return manifests for a real introduced finding without errors.
+  setup:
+    strategy: clone
+    branch: lab/deep-mcp-explain
+    operations:
+    - name: replace
+      path: app/models/order.rb
+      from: '  scope :completed, -> { where(status: "completed") }'
+      to: "  scope :completed, -> { where(status: \"completed\") }\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount * 0.9\n  end"
+    - name: commit
+      message: explain fixture
+  command:
+    interface: mcp_explain
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    explain_preview_ok: true
+    investigate_preview_ok: true
+  cleanup: remove_worktree
+  tags:
+  - mcp
+  - advisory
+- id: DEEP-POL-HUMAN-02
+  title: medium-risk change triggers its human review requirement
+  category: engineering_policy
+  description: A dependencies-surface change under a medium review rule yields REVIEW_REQUIRED with exit 3.
+  setup:
+    strategy: clone
+    branch: lab/deep-pol-human-medium
+    operations:
+    - name: write_raw
+      path: .railverdict.yml
+      content: "version: 1.7\nmode: advisory\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n  rspec:\n    enabled: false\n    required: false\ngit:\n  base: main\nengineering_policy:\n  review:\n    medium:\n      human_review: required\n"
+    - name: append
+      path: Gemfile
+      content: "\n# deep human medium note\n"
+    - name: commit
+      message: human medium fixture
+  command:
+    interface: cli
+    args:
+    - policy
+    - --base
+    - main
+    - --format
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 3
+  expected:
+    decision: REVIEW_REQUIRED
+    requirement_req-human-review-medium: review_required
+  cleanup: remove_worktree
+  tags:
+  - policy
+  - human-review
+- id: DEEP-ADV-01
+  title: handoff verify rejects a traversal path
+  category: refusal
+  description: handoff verify with a path escaping the repository fails closed with exit 2 and no verdict.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - handoff
+    - verify
+    - ../../outside.json
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - adversarial
+- id: DEEP-ADV-02
+  title: receipt verify rejects an absolute outside path
+  category: refusal
+  description: receipt verify with an absolute path outside any repository fails closed with exit 2 and no verdict.
+  setup:
+    strategy: clone
+    operations: []
+  command:
+    interface: cli
+    args:
+    - receipt
+    - verify
+    - /tmp/outside-receipt.json
+    - --format
+    - json
+  expected_gate: UNKNOWN
+  expected_completion: UNKNOWN
+  expected_exit: 2
+  expected:
+    stdout_empty: true
+  cleanup: remove_worktree
+  tags:
+  - fast
+  - refusal
+  - adversarial
+- id: DEEP-CI-M01
+  title: authentication change reports the authentication surface
+  category: pr_intelligence
+  description: Touching config/initializers/devise.rb marks surface authentication
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m01
+    operations:
+    - name: write
+      path: config/initializers/devise.rb
+      content: "# synthetic devise marker\n"
+    - name: commit
+      message: surface authentication fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_authentication_changed: true
+    surface_authentication_detection: inferred
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M02
+  title: database change reports the database surface
+  category: pr_intelligence
+  description: Touching db/schema.rb marks surface database changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m02
+    operations:
+    - name: write
+      path: db/schema.rb
+      content: "# synthetic schema marker\n"
+    - name: commit
+      message: surface database fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_database_changed: true
+    surface_database_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M03
+  title: public_api change reports the public_api surface
+  category: pr_intelligence
+  description: Touching app/controllers/api/health_controller.rb marks surface public_api
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m03
+    operations:
+    - name: write
+      path: app/controllers/api/health_controller.rb
+      content: |
+        module Api
+          class HealthController < ApplicationController
+            def show
+              head :ok
+            end
+          end
+        end
+    - name: commit
+      message: surface public_api fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_public_api_changed: true
+    surface_public_api_detection: inferred
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M04
+  title: background_jobs change reports the background_jobs surface
+  category: pr_intelligence
+  description: Touching app/jobs/recall_job.rb marks surface background_jobs changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m04
+    operations:
+    - name: write
+      path: app/jobs/recall_job.rb
+      content: |
+        class RecallJob < ApplicationJob
+        end
+    - name: commit
+      message: surface background_jobs fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_background_jobs_changed: true
+    surface_background_jobs_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M05
+  title: controllers change reports the controllers surface
+  category: pr_intelligence
+  description: Touching app/controllers/health_controller.rb marks surface controllers
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m05
+    operations:
+    - name: write
+      path: app/controllers/health_controller.rb
+      content: |
+        class HealthController < ApplicationController
+          def show
+            head :ok
+          end
+        end
+    - name: commit
+      message: surface controllers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_controllers_changed: true
+    surface_controllers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M06
+  title: models change reports the models surface
+  category: pr_intelligence
+  description: Touching app/models/order.rb marks surface models changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m06
+    operations:
+    - name: append
+      path: app/models/order.rb
+      content: |2
+
+        # deep models touch
+    - name: commit
+      message: surface models fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_models_changed: true
+    surface_models_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M07
+  title: views change reports the views surface
+  category: pr_intelligence
+  description: Touching app/views/orders/show_extra.html.erb marks surface views changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m07
+    operations:
+    - name: write
+      path: app/views/orders/show_extra.html.erb
+      content: "<!-- deep views marker -->\n"
+    - name: commit
+      message: surface views fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_views_changed: true
+    surface_views_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M08
+  title: mailers change reports the mailers surface
+  category: pr_intelligence
+  description: Touching app/mailers/recall_mailer.rb marks surface mailers changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m08
+    operations:
+    - name: write
+      path: app/mailers/recall_mailer.rb
+      content: |
+        class RecallMailer
+          def self.preview
+            "preview"
+          end
+        end
+    - name: commit
+      message: surface mailers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_mailers_changed: true
+    surface_mailers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M09
+  title: storage change reports the storage surface
+  category: pr_intelligence
+  description: Touching config/storage_lab.yml marks surface storage changed with
+    evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m09
+    operations:
+    - name: write
+      path: config/storage_lab.yml
+      content: "# deep storage marker\n"
+    - name: commit
+      message: surface storage fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_storage_changed: true
+    surface_storage_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M10
+  title: initializers change reports the initializers surface
+  category: pr_intelligence
+  description: Touching config/initializers/lab_probe_init.rb marks surface initializers
+    changed with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m10
+    operations:
+    - name: write
+      path: config/initializers/lab_probe_init.rb
+      content: "# synthetic initializer marker\n"
+    - name: commit
+      message: surface initializers fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_initializers_changed: true
+    surface_initializers_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M11
+  title: configuration change reports the configuration surface
+  category: pr_intelligence
+  description: Touching config/application.rb marks surface configuration changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m11
+    operations:
+    - name: append
+      path: config/application.rb
+      content: |2
+
+        # deep configuration touch
+    - name: commit
+      message: surface configuration fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_configuration_changed: true
+    surface_configuration_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M12
+  title: test_infrastructure change reports the test_infrastructure surface
+  category: pr_intelligence
+  description: Touching spec/spec_helper.rb marks surface test_infrastructure changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m12
+    operations:
+    - name: append
+      path: spec/spec_helper.rb
+      content: |2
+
+        # deep test infra touch
+    - name: commit
+      message: surface test_infrastructure fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_test_infrastructure_changed: true
+    surface_test_infrastructure_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M13
+  title: shared_infrastructure change reports the shared_infrastructure surface
+  category: pr_intelligence
+  description: Touching config/boot.rb marks surface shared_infrastructure changed
+    with evidence while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m13
+    operations:
+    - name: append
+      path: config/boot.rb
+      content: |2
+
+        # deep shared infra touch
+    - name: commit
+      message: surface shared_infrastructure fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_shared_infrastructure_changed: true
+    surface_shared_infrastructure_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-CI-M14
+  title: routes change reports the routes surface
+  category: pr_intelligence
+  description: Touching config/routes.rb marks surface routes changed with evidence
+    while the gate stays green.
+  setup:
+    strategy: clone
+    branch: lab/deep-ci-m14
+    operations:
+    - name: append
+      path: config/routes.rb
+      content: |2
+
+        # deep routes touch
+    - name: commit
+      message: surface routes fixture
+  command:
+    interface: cli
+    args:
+    - pr
+    - "--base"
+    - main
+    - "--format"
+    - json
+  expected_gate: PASS
+  expected_completion: complete
+  expected_exit: 0
+  expected:
+    surface_routes_changed: true
+    surface_routes_detection: detected
+  cleanup: remove_worktree
+  tags:
+  - pr-intelligence
+  - surface-sweep
+- id: DEEP-GIT-EMPTY-01
+  title: unborn HEAD fails closed with an incomplete verdict
+  category: git_changed_scope
+  description: A repository with no commits yields INCOMPLETE/incomplete exit 2 and a verdict document, never a crash or an empty diff treated as clean.
+  setup:
+    strategy: fresh
+    operations:
+    - name: write
+      path: .railverdict.yml
+      content: "version: 1.5\nmode: no_new_debt\nanalyzers:\n  rubocop:\n    enabled: true\n    required: false\n"
+    - name: write
+      path: app.rb
+      content: "x = 1\n"
+  command:
+    interface: cli
+    args:
+    - check
+    - --format
+    - json
+  expected_gate: INCOMPLETE
+  expected_completion: incomplete
+  expected_exit: 2
+  expected:
+    policy_status: not_evaluated
+  cleanup: remove_worktree
+  tags:
+  - git-changed-scope
+  - empty-tree

@@ -6,7 +6,7 @@ require "json"
 require "optparse"
 require "yaml"
 
-root = File.expand_path("..", __dir__)
+root = ENV.fetch("LAB_ROOT", File.expand_path("..", __dir__))
 report_path = File.join(root, "docs", "VALIDATION_REPORT.md")
 OptionParser.new { |opts| opts.on("--report PATH") { |value| report_path = File.expand_path(value) } }.parse!
 
@@ -31,17 +31,33 @@ rows = selected_scenarios.map do |scenario|
   artifact = File.join(root, "artifacts", id)
   observation_path = File.join(artifact, "lab-observation.json")
   observed_path = File.join(artifact, "observed.json")
-  observation = File.file?(observation_path) ? JSON.parse(File.read(observation_path)) : {}
-  observed = File.file?(observed_path) ? JSON.parse(File.read(observed_path)) : {}
+  observation = File.file?(observation_path) ? (JSON.parse(File.read(observation_path)) rescue {}) : {}
+  observed = File.file?(observed_path) ? (JSON.parse(File.read(observed_path)) rescue {}) : {}
   runner = run_results[id] || {}
-  status = runner["status"] || (observation["all_matched"] == true ? "PASS" : "BLOCKED")
-  status = "SKIPPED" if observed["status"] == "SKIPPED"
+  integrity_error = nil
+  status = if observed["status"] == "SKIPPED"
+             "SKIPPED"
+           elsif observation.empty? || !observation.key?("checks")
+             integrity_error = "missing lab observation"
+             "BLOCKED"
+           elsif observation["scenario_id"] != id
+             integrity_error = "observation scenario mismatch"
+             "BLOCKED"
+           elsif runner["status"] == "PASS" && observation["all_matched"] != true
+             integrity_error = "runner PASS detached from observation"
+             "FAIL"
+           elsif observation["all_matched"] == true && Array(observation["unconsumed_assertions"]).any?
+             integrity_error = "passing observation with unconsumed assertions"
+             "FAIL"
+           else
+             runner["status"] || (observation["all_matched"] == true ? "PASS" : "BLOCKED")
+           end
   {
     "id" => id, "title" => scenario["title"], "category" => scenario["category"],
     "expected_gate" => scenario["expected_gate"], "actual_gate" => observation.dig("actual", "gate") || "UNKNOWN",
     "expected_exit" => scenario["expected_exit"], "actual_exit" => observation.dig("actual", "exit_code"),
     "status" => status, "duration" => runner["duration_seconds"] || observation["duration_seconds"] || 0.0,
-    "error" => runner["error"]
+    "error" => runner["error"] || integrity_error
   }
 end
 
@@ -51,15 +67,26 @@ false_fails = rows.select { |row| row["expected_gate"] == "PASS" && row["actual_
 categories = rows.group_by { |row| row["category"] }.transform_values do |items|
   { "passed" => items.count { |item| item["status"] == "PASS" }, "total" => items.count { |item| item["status"] != "SKIPPED" }, "skipped" => items.count { |item| item["status"] == "SKIPPED" } }
 end
-verdict = if false_passes.any?
+if rows.empty?
+  $stderr.puts "No scenario rows to aggregate; refusing to certify an empty campaign."
+  exit 2
+end
+integrity_errors = rows.select { |row| row["error"] && %w[BLOCKED FAIL].include?(row["status"]) && row["error"].match?(/(missing lab observation|mismatch|detached|unconsumed)/) }
+executed_ids = rows.select { |row| %w[PASS FAIL].include?(row["status"]) }.map { |row| row["id"] }
+catalog_capabilities = manifest.fetch("scenarios").select { |scenario| scenario["capability"] }.group_by { |scenario| scenario["capability"] }
+uncovered_capabilities = catalog_capabilities.reject { |_cap, list| (list.map { |scenario| scenario["id"] } & executed_ids).any? }.keys
+verdict = if integrity_errors.any?
             "VALIDATION FAIL"
+          elsif false_passes.any?
+            "VALIDATION FAIL"
+          elsif uncovered_capabilities.any?
+            "VALIDATION INCOMPLETE"
           elsif counts["BLOCKED"].to_i.positive? || counts["FAIL"].to_i.positive?
             "VALIDATION PASS WITH FINDINGS"
           else
             "VALIDATION PASS"
           end
-
-summary = { "candidate" => candidate, "counts" => counts, "false_passes" => false_passes, "false_fails" => false_fails, "categories" => categories, "scenarios" => rows, "final_verdict" => verdict }
+summary = { "candidate" => candidate, "counts" => counts, "false_passes" => false_passes, "false_fails" => false_fails, "categories" => categories, "scenarios" => rows, "final_verdict" => verdict, "integrity_errors" => integrity_errors, "uncovered_capabilities" => uncovered_capabilities }
 File.write(File.join(root, "artifacts", "validation-summary.json"), JSON.pretty_generate(summary))
 
 lines = []
@@ -135,6 +162,12 @@ lines << "- PR Intelligence scenarios are capability-gated and are skipped when 
 lines << "- RVLAB-REFUSE-02 is capability-gated and is skipped because the frozen candidate declares no per-analyzer timeout capability."
 lines << "- External client/player behavior and hosted CI remain outside this local campaign."
 lines << ""
+lines << "## Aggregation Integrity"
+lines << ""
+lines << "Integrity errors: #{integrity_errors.any? ? "YES" : "NO"}."
+integrity_errors.each { |row| lines << "- #{row["id"]} — #{row["error"]}" }
+lines << "Uncovered catalog capabilities: #{uncovered_capabilities.any? ? uncovered_capabilities.join(', ') : "none"}."
+lines << ""
 lines << "## Final Verdict"
 lines << ""
 lines << verdict
@@ -144,3 +177,4 @@ FileUtils.mkdir_p(File.dirname(report_path))
 File.write(report_path, lines.join("\n"))
 puts "Generated #{report_path}"
 puts JSON.pretty_generate(counts)
+exit(verdict == "VALIDATION PASS" ? 0 : verdict == "VALIDATION INCOMPLETE" ? 2 : 1)

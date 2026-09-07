@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        category: [acceptance, policy_rejection, refusal, baseline_waiver, git_changed_scope, analyzers, repair_anti_cheating, mcp, package, determinism, multi_fault, pr_intelligence, agent, simplecov]
+        category: [acceptance, policy_rejection, refusal, baseline_waiver, git_changed_scope, analyzers, repair_anti_cheating, mcp, package, determinism, multi_fault, pr_intelligence, agent, simplecov, engineering_policy, review_workflow, change_intelligence, freshness, receipt, portability, environment, test_selection, repair, hardening, security]
     steps:
       - uses: actions/checkout@v4
         with:

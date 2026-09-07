@@ -25,6 +25,9 @@ module LabSupport
   rescue JSON::ParserError
     {}
   end
+  def json_strict(stdout)
+    JSON.parse(stdout)
+  end
 
   def canonical(value)
     case value
@@ -64,9 +67,13 @@ module LabSupport
     env
   end
 
-  def product_run(candidate, args, cwd:, extra_env: {})
+  def product_run(candidate, args, cwd:, extra_env: {}, timeout_seconds: nil)
     env = fixture_env(candidate.env.merge(extra_env), cwd)
-    run([candidate.command, *args], cwd: cwd, env: env)
+    argv = [candidate.command, *args]
+    # timeout(1): TERM first for a clean shutdown, KILL after a 5s grace period.
+    # A timeout surfaces as exit 124; a bare -s KILL would report 137 instead.
+    argv = ["timeout", "-k", "5", timeout_seconds.to_i.to_s, *argv] if timeout_seconds
+    run(argv, cwd: cwd, env: env)
   end
 
   def clone_fixture(repo_root, work_dir, branch: nil)
@@ -86,6 +93,62 @@ module LabSupport
 
     _stdout, stderr, status = git(work_dir, "checkout", "-b", branch)
     raise "fixture branch failed: #{stderr}" unless status.success?
+  end
+  def fixture_identity(work_dir)
+    head_out, head_err, head_status = git(work_dir, "rev-parse", "HEAD")
+    branch_out, _branch_err, branch_status = git(work_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    status_out, _status_err, _status_status = git(work_dir, "status", "--short")
+    {
+      "base_commit" => head_status.success? ? head_out.strip : "unavailable:#{head_err.strip[0, 200]}",
+      "branch" => branch_status.success? ? branch_out.strip : "unavailable",
+      "status" => status_out.strip
+    }
+  rescue StandardError => error
+    { "error" => "#{error.class}: #{error.message}" }
+  end
+  def stage(work_dir, paths)
+    _stdout, stderr, status = git(work_dir, "add", "--", *Array(paths))
+    raise "fixture stage failed: #{stderr}" unless status.success?
+  end
+  def canonical_json_digest(core)
+    require "digest"
+    Digest::SHA256.hexdigest(JSON.generate(canonical(core)))
+  end
+  def acquire_scenario_lock(root, id)
+    lock_dir = File.join(root, "artifacts", "#{id}.lock")
+    FileUtils.mkdir_p(File.dirname(lock_dir))
+    begin
+      Dir.mkdir(lock_dir)
+    rescue Errno::EEXIST
+      holder = begin
+        File.read(File.join(lock_dir, "pid")).strip
+      rescue StandardError
+        "unknown"
+      end
+      alive = holder =~ /\A\d+\z/ && begin
+        Process.kill(0, holder.to_i)
+        true
+      rescue StandardError
+        false
+      end
+      return { "locked" => false, "holder" => holder } if alive
+      FileUtils.rm_rf(lock_dir)
+      Dir.mkdir(lock_dir)
+    end
+    File.write(File.join(lock_dir, "pid"), Process.pid.to_s)
+    { "locked" => true, "lock_dir" => lock_dir }
+  end
+
+  def release_scenario_lock(lock)
+    return unless lock.is_a?(Hash) && lock["locked"]
+    dir = lock["lock_dir"]
+    pid_file = File.join(dir, "pid")
+    current = begin
+      File.read(pid_file).strip
+    rescue StandardError
+      nil
+    end
+    FileUtils.rm_rf(dir) if current == Process.pid.to_s
   end
 
   def fresh_fixture(work_dir)
@@ -165,17 +228,23 @@ module LabSupport
         FileUtils.rm_f(File.join(work_dir, operation.fetch("path")))
       when "config_replace"
         path = File.join(work_dir, ".railverdict.yml")
-        File.write(path, File.read(path).sub(operation.fetch("from"), operation.fetch("to")))
+        original = File.read(path)
+        updated = original.sub(operation.fetch("from"), operation.fetch("to"))
+        raise "config_replace target not found: #{operation.fetch('from').inspect}" if updated == original
+        File.write(path, updated)
       when "remove_dependency"
         gem_name = operation.fetch("gem")
         gemfile = File.join(work_dir, "Gemfile")
         File.write(gemfile, File.readlines(gemfile).reject { |line| line.include?("gem \"#{gem_name}\"") }.join)
-        run(["bundle", "lock", "--remove", gem_name], cwd: work_dir)
+        _stdout, stderr, status = run(["bundle", "lock", "--local"], cwd: work_dir)
+        raise "bundle lock --local failed: #{stderr}" unless status.success?
       when "fake_bundle"
         install_fake_bundle(work_dir, operation)
         env["PATH"] = "#{File.join(work_dir, "tmp", "fake-bin")}:#{ENV.fetch("PATH", "")}".freeze
       when "commit"
         commit(work_dir, operation.fetch("message", "scenario change"))
+      when "stage"
+        stage(work_dir, operation.fetch("paths", operation.fetch("path", [])))
       when "baseline_create"
         _stdout, stderr, status = product_run(candidate, ["baseline", "create"], cwd: work_dir, extra_env: env)
         raise "baseline create failed: #{stderr}" unless status.success?
@@ -296,6 +365,8 @@ module LabSupport
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nkill -TERM $$"
     when "oversized"
       "case \"$*\" in *--version*) echo '1.88.0'; exit 0;; esac\nhead -c 200000 /dev/zero; exit 0"
+    when "record_reuse"
+      "L=\"$PWD/..\"; echo \"$$ $*\" >> \"$L/reuse-$PPID.log\""
     else
       raise "unknown fake bundle behavior: #{behavior}"
     end

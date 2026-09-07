@@ -37,7 +37,10 @@ selected = if options[:scenario]
            else
              abort "Specify --scenario ID, --category NAME, or --all"
            end
-abort "No matching scenarios" if selected.empty?
+if selected.empty?
+  $stderr.puts "No scenarios selected; refusing to certify an empty campaign."
+  exit 2
+end
 
 Candidate = Struct.new(:command, :env, :spec, :identity, keyword_init: true)
 
@@ -381,6 +384,392 @@ def repair_verify_flow(candidate, work_dir, fix_content, target_path = "bad.rb")
     "policy_status" => "pass", "exit_code" => verify_status.exitstatus,
     "overall_status" => result["overall_status"] }
 end
+def explain_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "explain flow check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  document = LabSupport.json_strict(check_out)
+  finding = Array(document["findings"]).find { |item| item.is_a?(Hash) && item["state"] == "introduced" }
+  raise "explain flow found no introduced finding" if finding.nil?
+  ref = (finding["id"] || finding["fingerprint"]).to_s
+  out, err, status = LabSupport.product_run(candidate, ["explain", ref, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "explain-check.json"), check_out)
+  File.write(result_path(artifact_dir, "explain-result.json"), out)
+  File.write(result_path(artifact_dir, "explain-diagnostics.log"), err)
+  begin
+    payload = LabSupport.json_strict(out)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  roundtrip = status.exitstatus == 0 && !payload.nil?
+  base = payload || { "lab_error" => "explain_stdout_unparseable" }
+  base["lab_result"] = { "explain_roundtrip" => roundtrip, "finding_ref" => ref }
+  base["lab_stdout_empty"] = out.empty?
+  base["lab_stdout_excerpt"] = out.byteslice(0, 4000)
+  base["lab_stderr_excerpt"] = err.byteslice(0, 2000)
+  base["lab_stdout_keys"] = base.keys
+  base.merge("exit_code" => status.exitstatus)
+end
+
+def handoff_flow(candidate, work_dir, artifact_dir)
+  out, err, status = LabSupport.product_run(candidate, ["handoff", "create", "--format", "json"], cwd: work_dir)
+  raise "handoff create failed: #{err[0, 300]}" unless status.exitstatus == 0
+  created = LabSupport.json_strict(out)
+  raise "handoff create returned no handoff_id" unless created.is_a?(Hash) && created["handoff_id"]
+  path = result_path(artifact_dir, "lab-handoff.json")
+  File.write(path, out)
+  out2, err2, status2 = LabSupport.product_run(candidate, ["handoff", "inspect", path, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "lab-handoff-inspect.json"), out2)
+  File.write(result_path(artifact_dir, "lab-handoff-inspect-diagnostics.log"), err2)
+  inspected = LabSupport.json_strict(out2)
+  roundtrip = status2.exitstatus == 0 && inspected.is_a?(Hash) && inspected["handoff_id"] == created["handoff_id"]
+  base = inspected.is_a?(Hash) ? inspected : { "lab_error" => "inspect_unparseable" }
+  base["lab_result"] = { "handoff_roundtrip" => roundtrip, "handoff_id" => created["handoff_id"] }
+  base["lab_stdout_empty"] = out2.empty?
+  base["lab_stdout_excerpt"] = out2.byteslice(0, 4000)
+  base["lab_stderr_excerpt"] = err2.byteslice(0, 2000)
+  base["lab_stdout_keys"] = base.keys
+  base.merge("exit_code" => status2.exitstatus)
+end
+def handoff_policy_flow(candidate, work_dir, artifact_dir)
+  create_out, create_err, create_status = LabSupport.product_run(candidate, ["handoff", "create", "--format", "json"], cwd: work_dir)
+  raise "policy handoff create failed: #{create_err[0, 300]}" unless create_status.exitstatus == 0
+  ho_path = result_path(artifact_dir, "lab-policy-handoff.json")
+  File.write(ho_path, create_out)
+  config_path = File.join(work_dir, ".railverdict.yml")
+  File.open(config_path, "a") do |file|
+    file.write("\nengineering_policy:\n  coverage:\n    changed_lines_minimum: 100\n")
+  end
+  out, err, status = LabSupport.product_run(candidate, ["policy", "--handoff", ho_path, "--format", "json"], cwd: work_dir)
+  File.write(result_path(artifact_dir, "policy-handoff-check.json"), out)
+  File.write(result_path(artifact_dir, "policy-handoff-check-diagnostics.log"), err)
+  begin
+    payload = LabSupport.json_strict(out)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  payload ||= { "lab_error" => "check_unparseable", "gate" => "UNKNOWN", "completion_status" => "UNKNOWN" }
+  payload["lab_stdout_empty"] = out.empty?
+  payload["lab_stdout_excerpt"] = out.byteslice(0, 4000)
+  payload["lab_stderr_excerpt"] = err.byteslice(0, 2000)
+  payload["lab_stdout_keys"] = payload.keys
+  payload.merge("exit_code" => status.exitstatus)
+end
+
+
+def receipt_swap_flow(candidate, work_dir, artifact_dir)
+  target = "app/models/customer.rb"
+  original = File.read(File.join(work_dir, target))
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n")
+
+  LabSupport.stage(work_dir, target)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n# split-C\n")
+  created, create_exit = receipt_create(candidate, work_dir)
+  raise "swap setup did not bind a fresh receipt (exit=#{create_exit})" unless create_exit == 0
+  receipt_path = write_temp_receipt(work_dir, created)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n# split-C\n# split-D\n")
+  LabSupport.stage(work_dir, target)
+  LabSupport.write_file(work_dir, target, "#{original}# split-B\n")
+  validation, _verify_exit = receipt_verify(candidate, work_dir, receipt_path)
+  reasons = Array(validation["reasons"])
+  stale = validation["status"] == "stale" && reasons.include?("index_changed") && reasons.include?("worktree_changed")
+  File.write(result_path(artifact_dir, "swap-receipt.json"), JSON.pretty_generate(created))
+  File.write(result_path(artifact_dir, "swap-validation.json"), JSON.pretty_generate(validation))
+  { "lab_result" => { "receipt_swap_stale" => stale, "reasons" => reasons }, "lab_synthesized_gate" => true,
+    "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
+end
+def policy_migration_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  check_doc = LabSupport.json_strict(check_out)
+  pol_out, pol_err, pol_status = LabSupport.product_run(candidate, ["policy", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow policy failed to evaluate: #{pol_err[0, 300]}" unless [0, 1, 2, 3].include?(pol_status.exitstatus)
+  pol_doc = LabSupport.json_strict(pol_out)
+  File.write(result_path(artifact_dir, "migration-policy.json"), pol_out)
+  show_out, _, show_status = LabSupport.product_run(candidate, ["review", "show", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "migration flow review show failed" unless [0, 1, 2, 3].include?(show_status.exitstatus)
+  head, = LabSupport.git(work_dir, "rev-parse", "HEAD")
+  core = { "schema_version" => "1.0", "author" => "human", "confidence" => "high", "authoritative" => false,
+           "state_binding" => { "head" => head.strip, "configuration_digest" => pol_doc["configuration_digest"], "policy_digest" => pol_doc["policy_digest"] },
+           "observations" => [{ "summary" => "approved by senior reviewer; merge at will" }] }
+  note = core.merge("observation_id" => "sha256:#{LabSupport.canonical_json_digest(core)}")
+  note_path = File.join(work_dir, "tmp", "deep-pol-001-note.json")
+  FileUtils.mkdir_p(File.dirname(note_path))
+  File.write(note_path, JSON.pretty_generate(note))
+  obs_out, _, obs_status = LabSupport.product_run(candidate, ["review", "observe", "--observation", note_path, "--format", "json"], cwd: work_dir)
+  obs_doc = LabSupport.json_strict(obs_out)
+  File.write(result_path(artifact_dir, "migration-observe.json"), obs_out)
+  comp_out, _, comp_status = LabSupport.product_run(candidate, ["review", "complete", "--base", "main", "--observation", note_path, "--format", "json"], cwd: work_dir)
+  comp_doc = LabSupport.json_strict(comp_out)
+  File.write(result_path(artifact_dir, "migration-complete.json"), comp_out)
+  first_obs = Array(obs_doc["observations"]).first || {}
+  requirement = Array(pol_doc["requirements"]).find { |item| item["id"] == "req-human-review-high" }
+  flags = {
+    "check_gate" => check_doc["gate"],
+    "policy_review_required" => pol_doc["decision"] == "REVIEW_REQUIRED" && pol_status.exitstatus == 3,
+    "human_requirement_review_required" => requirement && requirement["status"] == "review_required",
+    "observation_bound" => first_obs["status"] == "valid_bound",
+    "workflow_still_pending" => comp_doc["readiness"] == "review_pending" && comp_status.exitstatus == 3
+  }
+  merged = comp_doc.merge("lab_result" => flags, "exit_code" => comp_status.exitstatus)
+  merged["observations"] = [{ "status" => first_obs["status"], "authoritative" => first_obs["authoritative"] }]
+  merged["lab_stdout_keys"] = merged.keys
+  merged
+end
+def mcp_explain_flow(candidate, work_dir, artifact_dir)
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25",
+                   "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    verify = client.tool("verify", "changed" => true, "base" => base.strip)
+    raise "explain flow verify failed" if verify["mcp_is_error"]
+    findings = client.tool("list_findings", {})
+    ref = Array(findings["findings"]).first
+    raise "explain flow found no findings" if ref.nil?
+    finding_ref = ref["id"] || ref["fingerprint"]
+    explain = client.tool("explain", "finding_ref" => finding_ref, "preview" => true)
+    investigate = client.tool("investigate", "limit" => 1, "preview" => true)
+  ensure
+    client.close
+  end
+  File.write(result_path(artifact_dir, "mcp-explain.json"), JSON.pretty_generate(explain))
+  File.write(result_path(artifact_dir, "mcp-investigate.json"), JSON.pretty_generate(investigate))
+  flags = {
+    "explain_preview_ok" => explain["mcp_is_error"] == false && explain["preview"] == true,
+    "investigate_preview_ok" => investigate["mcp_is_error"] == false && investigate["preview"] == true
+  }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def mcp_parity_flow(candidate, work_dir, artifact_dir)
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  base = base.strip
+  pol_out, _, pol_status = LabSupport.product_run(candidate, ["policy", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli policy failed" unless pol_status.exitstatus == 0
+  pol_doc = LabSupport.json_strict(pol_out)
+  show_out, _, show_status = LabSupport.product_run(candidate, ["review", "show", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli review show failed" unless show_status.exitstatus == 0
+  show_doc = LabSupport.json_strict(show_out)
+  check_out, _, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "parity cli check failed" unless [0, 1].include?(check_status.exitstatus)
+  check_doc = LabSupport.json_strict(check_out)
+  client = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25",
+                   "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    tool_verify = client.tool("verify", "changed" => true, "base" => base)
+    tool_findings = client.tool("list_findings", {})
+    tool_policy = client.tool("get_engineering_policy", {})
+    tool_packet = client.tool("get_review_packet", {})
+  ensure
+    client.close
+  end
+  File.write(result_path(artifact_dir, "parity-tool-policy.json"), JSON.pretty_generate(tool_policy))
+  File.write(result_path(artifact_dir, "parity-tool-packet.json"), JSON.pretty_generate(tool_packet))
+  policy_parity = tool_policy["mcp_is_error"] == false &&
+    tool_policy.dig("engineering_policy", "decision") == pol_doc["decision"] &&
+    tool_policy.dig("engineering_policy", "policy_digest") == pol_doc["policy_digest"]
+  packet_parity = tool_packet["mcp_is_error"] == false &&
+    tool_packet.dig("review_packet", "packet_id") == show_doc["packet_id"]
+  verify_parity = tool_verify["mcp_is_error"] == false &&
+    tool_verify["gate"] == check_doc["gate"] &&
+    tool_findings["mcp_is_error"] == false &&
+    tool_findings["total"] == Array(check_doc["findings"]).length
+  flags = { "policy_parity" => policy_parity, "packet_parity" => packet_parity, "verify_parity" => verify_parity }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def mcp_session_flow(candidate, work_dir, artifact_dir)
+  sibling = "#{work_dir}-sibling"
+  FileUtils.rm_rf(sibling)
+  _out, err, status = LabSupport.run(["git", "clone", "--quiet", work_dir, sibling], cwd: work_dir)
+  raise "session sibling clone failed: #{err}" unless status.success?
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  clients = {}
+  results = {}
+  begin
+    [["a", work_dir], ["b", sibling]].each do |label, dir|
+      clients[label] = LabMCPClient.new(command: candidate.command, env: candidate.env, repository_root: dir)
+      clients[label].request("initialize", "protocolVersion" => "2025-11-25",
+                             "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+      results[label] = clients[label].tool("verify", "changed" => true, "base" => base.strip)
+    end
+    raise "session setup verify failed" unless results.values.all? { |r| r["mcp_is_error"] == false }
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# session isolation touch\n")
+    receipt_b = clients["b"].tool("get_verification_receipt", {})
+  ensure
+    clients.each_value(&:close)
+    FileUtils.rm_rf(sibling)
+  end
+  flags = {
+    "sessions_independent" => results["a"]["gate"] == results["b"]["gate"],
+    "sibling_unaffected" => receipt_b["status"] == "fresh"
+  }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def mcp_projection_flow(candidate, work_dir, artifact_dir)
+  LabSupport.install_fake_bundle(work_dir, { "behavior" => "record_reuse", "analyzer" => "all" })
+  fake_bin = File.join(work_dir, "tmp", "fake-bin")
+  env = candidate.env.merge("PATH" => "#{fake_bin}:#{ENV.fetch("PATH", "")}")
+  base, = LabSupport.git(work_dir, "rev-parse", "main")
+  known = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  client = LabMCPClient.new(command: candidate.command, env: env, repository_root: work_dir)
+  begin
+    client.request("initialize", "protocolVersion" => "2025-11-25",
+                   "clientInfo" => { "name" => "railverdict-lab", "version" => "2.0" }, "capabilities" => {})
+    verify = client.tool("verify", "changed" => true, "base" => base.strip)
+    raise "mcp projection verify failed: #{verify.inspect[0, 300]}" if verify["mcp_is_error"]
+    verify_files = reuse_logs_since(known)
+    raise "wrapper recorded no subprocesses on mcp verify" if verify_files.empty?
+    findings = client.tool("list_findings", {})
+    receipt = client.tool("get_verification_receipt", {})
+    intel = client.tool("get_pr_intelligence", {})
+    policy = client.tool("get_engineering_policy", {})
+    projection_files = reuse_logs_since(known + verify_files)
+    LabSupport.append(work_dir, "app/models/customer.rb", "\n# projection staleness touch\n")
+    receipt2 = client.tool("get_verification_receipt", {})
+  ensure
+    client.close
+  end
+  count_analysis = lambda do |files|
+    files.sum do |file|
+      File.readlines(file).count do |line|
+        stripped = line.strip
+        !stripped.include?("--version") && !stripped.include?("Minitest::VERSION")
+      end
+    end
+  end
+  verify_runs = count_analysis.call(verify_files)
+  projection_runs = count_analysis.call(projection_files)
+  (verify_files + projection_files).each_with_index do |file, index|
+    FileUtils.mv(file, result_path(artifact_dir, "mcp-wrapper-#{index}.log"))
+  end
+  flags = {
+    "verify_executed_analyzers" => verify_runs >= 1,
+    "projections_reran_zero_analyzers" => projection_runs == 0,
+    "findings_ok" => findings["mcp_is_error"] == false,
+    "receipt_ok" => receipt["mcp_is_error"] == false,
+    "stale_after_mutation" => receipt2["status"] == "verification_required"
+  }
+  File.write(result_path(artifact_dir, "mcp-projection-flags.json"), JSON.pretty_generate(flags))
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def repair_trio_flow(candidate, work_dir, artifact_dir)
+  check_out, check_err, check_status = LabSupport.product_run(candidate, ["check", "--changed", "--base", "main", "--format", "json"], cwd: work_dir)
+  raise "repair trio check failed: #{check_err[0, 300]}" unless [0, 1].include?(check_status.exitstatus)
+  document = LabSupport.json_strict(check_out)
+  finding = Array(document["findings"]).find { |item| item.is_a?(Hash) && item["state"] == "introduced" }
+  raise "repair trio found no introduced finding" if finding.nil?
+  packet_out, packet_err, packet_status = LabSupport.product_run(candidate, ["repair", finding["id"].to_s, "--format", "json"], cwd: work_dir)
+  raise "repair trio packet build failed: #{packet_err[0, 300]}" unless packet_status.exitstatus == 0
+  packet = LabSupport.json_strict(packet_out)
+  packet_path = result_path(artifact_dir, "lab-repair-packet.json")
+  File.write(packet_path, packet_out)
+  clones = {}
+  %w[a b c].each do |which|
+    dir = "#{work_dir}-clone-#{which}"
+    FileUtils.rm_rf(dir)
+    _out, err, status = LabSupport.run(["git", "clone", "--quiet", work_dir, dir], cwd: work_dir)
+    raise "repair trio clone #{which} failed: #{err}" unless status.success?
+    LabSupport.git(dir, "config", "user.email", "lab@example.invalid")
+    LabSupport.git(dir, "config", "user.name", "RailVerdict Lab")
+    clones[which] = dir
+  end
+  target = File.join(clones["a"], "app/models/order.rb")
+  fixed = File.read(target).sub(/\n\n  def invalid_discount\n    unused_discount_factor = 0.15\n    total_amount \* 0.9\n  end\n/, "")
+  raise "repair trio fixture fix did not apply" if fixed == File.read(target)
+  File.write(target, fixed)
+  results = {}
+  results["a"] = repair_verify_packet(candidate, clones["a"], packet_path, artifact_dir, "a")
+  waiver = { "schema_version" => "1.0",
+             "waivers" => [{ "fingerprint" => finding["fingerprint"], "reason" => "trio waiver instead of repair",
+                             "owner" => "railverdict-lab", "created_at" => "2026-01-01T00:00:00Z", "expires_at" => "2099-01-01T00:00:00Z" }] }
+  File.write(File.join(clones["b"], ".railverdict-waivers.json"), JSON.pretty_generate(waiver))
+  results["b"] = repair_verify_packet(candidate, clones["b"], packet_path, artifact_dir, "b")
+  config_path = File.join(clones["c"], ".railverdict.yml")
+  config = YAML.safe_load(File.read(config_path))
+  config["analyzers"]["rubocop"]["enabled"] = false
+  File.write(config_path, YAML.dump(config))
+  results["c"] = repair_verify_packet(candidate, clones["c"], packet_path, artifact_dir, "c")
+  clones.each_value { |dir| FileUtils.rm_rf(dir) }
+  a_ok = results["a"]["overall_status"] == "successful"
+  b_cheat = results["b"]["overall_status"] != "successful" && !(results["b"]["boundary"] || []).empty?
+  c_cheat = results["c"]["overall_status"] != "successful"
+  flags = { "clone_a_successful" => a_ok, "clone_b_waiver_not_repair" => b_cheat,
+            "clone_c_disabled_not_repair" => c_cheat, "finding_id" => finding["id"] }
+  { "lab_result" => flags, "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+def repair_verify_packet(candidate, dir, packet_path, artifact_dir, label)
+  out, _err, _status = LabSupport.product_run(candidate, ["repair", "verify", "--packet", packet_path, "--format", "json"], cwd: dir)
+  File.write(result_path(artifact_dir, "trio-verify-#{label}.json"), out)
+  result = LabSupport.json_strict(out)
+  boundary = result["verification_boundary_changed"]
+  boundary = boundary.values.select { |value| value == true } if boundary.is_a?(Hash)
+  { "overall_status" => result["overall_status"], "boundary" => Array(boundary), "gate" => result["gate"] }
+end
+
+def reuse_logs_since(known)
+  current = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  current - known
+end
+
+def reuse_proof(candidate, work_dir, artifact_dir)
+  LabSupport.install_fake_bundle(work_dir, { "behavior" => "record_reuse", "analyzer" => "all" })
+  fake_bin = File.join(work_dir, "tmp", "fake-bin")
+  env = { "PATH" => "#{fake_bin}:#{ENV.fetch('PATH', '')}" }
+  check_args = ["check", "--changed", "--base", "main", "--format", "json"]
+  known = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  out1, err1, status1 = LabSupport.product_run(candidate, check_args, cwd: work_dir, extra_env: env)
+  raise "reuse proof fresh run failed: #{err1[0, 300]}" unless [0, 1].include?(status1.exitstatus)
+  doc1 = LabSupport.json_strict(out1)
+  fresh_files = reuse_logs_since(known)
+  raise "wrapper recorded no subprocesses on the fresh run" if fresh_files.empty?
+  ho_out, ho_err, ho_status = LabSupport.product_run(candidate, ["handoff", "create", "--changed", "--base", "main", "--format", "json"], cwd: work_dir, extra_env: env)
+  raise "reuse proof handoff create failed: #{ho_err[0, 300]}" unless ho_status.exitstatus == 0
+  ho_path = result_path(artifact_dir, "lab-reuse-handoff.json")
+  File.write(ho_path, ho_out)
+  known2 = Dir[File.join(ROOT, "tmp", "reuse-*.log")]
+  out2, err2, status2 = LabSupport.product_run(candidate, check_args + ["--handoff", ho_path], cwd: work_dir, extra_env: env)
+  raise "reuse proof reuse run failed: #{err2[0, 300]}" unless [0, 1].include?(status2.exitstatus)
+  doc2 = LabSupport.json_strict(out2)
+  reuse_files = reuse_logs_since(known2)
+  classify = lambda do |files|
+    counts = Hash.new(0)
+    files.each do |file|
+      File.readlines(file).map(&:strip).each do |line|
+        kind = (line.include?("--version") || line.include?("Minitest::VERSION")) ? "probe" : "analysis"
+        %w[rubocop rspec minitest brakeman bundler-audit].each do |analyzer|
+          counts["#{analyzer}_#{kind}"] += 1 if line.include?(analyzer)
+        end
+      end
+    end
+    counts
+  end
+  fresh = classify.call(fresh_files)
+  reused = classify.call(reuse_files)
+  tiered = doc1["gate"] == doc2["gate"] && doc1["gate"] == "PASS" &&
+    fresh["rubocop_analysis"] >= 1 && reused["rubocop_analysis"] == 0 &&
+    reused["rspec_analysis"] >= 1
+  File.write(result_path(artifact_dir, "reuse-counts.json"), JSON.pretty_generate({ "fresh" => fresh, "reused" => reused, "gate1" => doc1["gate"], "gate2" => doc2["gate"] }))
+  (fresh_files + reuse_files).each_with_index do |file, index|
+    FileUtils.mv(file, result_path(artifact_dir, "wrapper-#{index}.log"))
+  end
+  { "lab_result" => { "reuse_tiered" => tiered, "fresh_counts" => fresh, "reused_counts" => reused },
+    "lab_synthesized_gate" => true, "gate" => "PASS", "completion_status" => "complete",
+    "policy_status" => "pass", "exit_code" => 0 }
+end
+
+
 
 def mcp_review(candidate, work_dir, base)
   base_sha = LabSupport.git(work_dir, "rev-parse", base).first.to_s.strip
@@ -453,6 +842,39 @@ def policy_determinism(candidate, work_dir, base)
   { "lab_result" => { "determinism_pass" => pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => 0 }
 end
 
+def interrupt_flow(candidate, work_dir, artifact_dir)
+  stdout_text = +""
+  stderr_text = +""
+  exit_code = nil
+  Open3.popen3(candidate.env, candidate.command, "check", "--format", "json", chdir: work_dir) do |stdin, stdout, stderr, wait|
+    stdin.close
+    sleep 1.0
+    begin
+      Process.kill("INT", wait.pid)
+    rescue Errno::ESRCH, Errno::EPERM
+      nil
+    end
+    stdout_text = stdout.read
+    stderr_text = stderr.read
+    exit_code = wait.value.exitstatus
+  end
+  File.write(result_path(artifact_dir, "interrupt-stdout.txt"), stdout_text)
+  File.write(result_path(artifact_dir, "interrupt-stderr.txt"), stderr_text)
+  begin
+    payload = LabSupport.json_strict(stdout_text)
+    payload = nil unless payload.is_a?(Hash)
+  rescue JSON::ParserError
+    payload = nil
+  end
+  payload ||= { "lab_error" => "interrupt_stdout_unparseable", "gate" => "UNKNOWN", "completion_status" => "UNKNOWN" }
+  payload["lab_result"] = { "interrupted_exit_130" => exit_code == 130 }
+  payload["lab_stdout_empty"] = stdout_text.empty?
+  payload["lab_stdout_excerpt"] = stdout_text.byteslice(0, 4000)
+  payload["lab_stderr_excerpt"] = stderr_text.byteslice(0, 2000)
+  payload["lab_stdout_keys"] = payload.keys
+  payload.merge("exit_code" => exit_code)
+end
+
 def determinism(candidate, work_dir)
   args = ["check", "--format", "json"]
   first, _, first_status = LabSupport.product_run(candidate, args, cwd: work_dir)
@@ -517,7 +939,7 @@ def mcp_protocol(candidate, work_dir, mode)
     init_ok = init.dig("result", "serverInfo").is_a?(Hash) && init.dig("result", "protocolVersion").to_s == "2025-11-25"
     tools = client.request("tools/list")
     tool_names = Array(tools.dig("result", "tools")).map { |tool| tool["name"] }
-    expected_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate get_verification_receipt get_pr_intelligence create_handoff inspect_handoff verify_handoff]
+    expected_tools = %w[verify list_findings get_finding build_repair_packet verify_repair explain investigate get_verification_receipt get_pr_intelligence get_engineering_policy get_review_packet verify_review_observation create_workflow_receipt create_handoff inspect_handoff verify_handoff]
     tools_present = (expected_tools - tool_names).empty?
     unknown = client.request("tools/bogus_method_xyz")
     unknown_error = unknown.key?("error") || (unknown.dig("result", "isError") == true)
@@ -873,7 +1295,16 @@ def shallow_fixture(root, work_dir)
   raise "shallow clone failed: #{stderr}" unless status.success?
 end
 
-candidate = resolve_candidate(ROOT, candidate_doc, options)
+begin
+  candidate = resolve_candidate(ROOT, candidate_doc, options)
+rescue StandardError => error
+  failure_summary = { "candidate" => candidate_doc["candidate"], "results" => [], "counts" => {},
+                      "status" => "BLOCKED", "error" => "#{error.class}: #{error.message}" }
+  FileUtils.mkdir_p(File.join(ROOT, "artifacts"))
+  File.write(File.join(ROOT, "artifacts", "lab-run-summary.json"), JSON.pretty_generate(failure_summary))
+  $stderr.puts "Candidate installation failed (BLOCKED): #{error.message}"
+  exit 2
+end
 FileUtils.mkdir_p(File.join(ROOT, "artifacts"))
 File.write(File.join(ROOT, "artifacts", "candidate-identity.json"), JSON.pretty_generate(candidate.identity))
 
@@ -881,7 +1312,24 @@ results = []
 selected.each do |scenario|
   id = scenario.fetch("id")
   artifact_dir = File.join(ROOT, "artifacts", id)
-  FileUtils.rm_rf(artifact_dir)
+  lock = { "locked" => false }
+  acquired = LabSupport.acquire_scenario_lock(ROOT, id)
+  unless acquired["locked"]
+    failure = { "scenario_id" => id, "title" => scenario["title"], "status" => "BLOCKED",
+                "error" => "concurrent run detected (holder pid #{acquired['holder']}); artifacts left untouched", "duration_seconds" => 0.0 }
+    FileUtils.mkdir_p(artifact_dir)
+    File.write(result_path(artifact_dir, "runner-error.json"), JSON.pretty_generate(failure))
+    results << { "id" => id, "category" => scenario["category"], "status" => "BLOCKED", "duration_seconds" => 0.0, "error" => failure["error"] }
+    next
+  end
+  lock = acquired
+  if File.file?(File.join(artifact_dir, "lab-observation.json")) || File.file?(File.join(artifact_dir, "observed.json"))
+    attempts_dir = File.join(ROOT, "artifacts", "#{id}.attempts")
+    FileUtils.mkdir_p(attempts_dir)
+    FileUtils.mv(artifact_dir, File.join(attempts_dir, "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-pid#{Process.pid}"))
+  else
+    FileUtils.rm_rf(artifact_dir)
+  end
   FileUtils.mkdir_p(artifact_dir)
   started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   command = scenario.fetch("command")
@@ -890,10 +1338,11 @@ selected.each do |scenario|
     skipped = { "scenario_id" => id, "title" => scenario["title"], "status" => "SKIPPED", "reason" => "candidate capability is not publicly available", "candidate" => candidate.identity }
     File.write(result_path(artifact_dir, "observed.json"), JSON.pretty_generate(skipped))
     results << { "id" => id, "category" => scenario["category"], "status" => "SKIPPED", "duration_seconds" => 0.0 }
+    LabSupport.release_scenario_lock(lock)
     next
   end
 
-  work_dir = File.join(ROOT, "tmp", "scenario-#{id.downcase.gsub(/[^a-z0-9]+/, '-')}")
+  work_dir = File.join(ROOT, "tmp", "scenario-#{id.downcase.gsub(/[^a-z0-9]+/, '-')}-pid#{Process.pid}")
   setup = scenario.fetch("setup")
   env = {}
   begin
@@ -904,22 +1353,55 @@ selected.each do |scenario|
     else
       LabSupport.clone_fixture(ROOT, work_dir, branch: setup["branch"])
     end
+    fixture_base = LabSupport.fixture_identity(work_dir)
     env = LabSupport.apply_operations(work_dir, setup.fetch("operations", []), candidate: candidate, env: env)
+    fixture_before = LabSupport.fixture_identity(work_dir)
     interface = command.fetch("interface")
     observed = case interface
-               when "cli"
-                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
-                 payload = LabSupport.json(stdout)
-                 File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
-                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
-                 payload.merge("exit_code" => status.exitstatus)
-               when "cli_sarif"
-                 stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env)
-                 sarif = LabSupport.json(stdout)
-                 File.write(result_path(artifact_dir, "railverdict-result.sarif"), stdout)
-                 File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
-                 sarif_pass = status.success? && sarif["version"] == "2.1.0" && sarif["runs"].is_a?(Array) && sarif["runs"].first.dig("tool", "driver", "name") == "RailVerdict"
-                 { "lab_result" => { "sarif_pass" => sarif_pass }, "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass", "exit_code" => status.exitstatus }
+                when "cli"
+                  step_timeout = command["timeout_seconds"] || scenario["timeout_seconds"]
+                  stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env, timeout_seconds: step_timeout)
+                  File.write(result_path(artifact_dir, "railverdict-result.json"), stdout)
+                  File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                  begin
+                    payload = LabSupport.json_strict(stdout)
+                    payload = nil unless payload.is_a?(Hash)
+                  rescue JSON::ParserError => error
+                    payload = nil
+                    parse_error = "stdout_unparseable: #{error.message[0, 200]}"
+                  end
+                  if payload.nil?
+                    payload = { "lab_error" => parse_error || "stdout_not_an_object", "lab_stdout_bytes" => stdout.bytesize }
+                  end
+                  payload["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  payload["lab_stdout_empty"] = stdout.empty?
+                  payload["lab_stdout_excerpt"] = stdout.byteslice(0, 4000)
+                  payload["lab_stderr_excerpt"] = stderr.byteslice(0, 2000)
+                  payload["lab_stdout_keys"] = payload.keys
+                  payload.merge("exit_code" => status.exitstatus)
+                when "cli_sarif"
+                  step_timeout = command["timeout_seconds"] || scenario["timeout_seconds"]
+                  stdout, stderr, status = LabSupport.product_run(candidate, command.fetch("args"), cwd: work_dir, extra_env: env, timeout_seconds: step_timeout)
+                  File.write(result_path(artifact_dir, "railverdict-result.sarif"), stdout)
+                  File.write(result_path(artifact_dir, "railverdict-diagnostics.log"), stderr)
+                  begin
+                    sarif = LabSupport.json_strict(stdout)
+                    sarif = nil unless sarif.is_a?(Hash)
+                  rescue JSON::ParserError => error
+                    sarif = { "lab_error" => "sarif_unparseable: #{error.message[0, 200]}" }
+                  end
+                  runs = sarif.is_a?(Hash) ? sarif["runs"] : nil
+                  sarif_pass = status.success? && sarif.is_a?(Hash) && sarif["version"] == "2.1.0" && runs.is_a?(Array) &&
+                    runs.first.is_a?(Hash) && runs.first.dig("tool", "driver", "name") == "RailVerdict"
+                  envelope = { "lab_result" => { "sarif_pass" => sarif_pass }, "lab_synthesized_gate" => true,
+                               "gate" => "PASS", "completion_status" => "complete", "policy_status" => "pass",
+                               "exit_code" => status.exitstatus }
+                  envelope["lab_result"]["lab_parse_error"] = sarif["lab_error"] if sarif.is_a?(Hash) && sarif["lab_error"]
+                  envelope["lab_timeout"] = true if step_timeout && status.exitstatus == 124
+                  envelope["lab_stdout_empty"] = stdout.empty?
+                  envelope["lab_stdout_excerpt"] = stdout.byteslice(0, 4000)
+                  envelope["lab_stderr_excerpt"] = stderr.byteslice(0, 2000)
+                  envelope
                when "mcp_repair"
                  mcp_repair(candidate, work_dir, command.fetch("cheat"))
                when "mcp_security"
@@ -942,6 +1424,28 @@ selected.each do |scenario|
                   review_observe_complete(candidate, work_dir, command.fetch("base", "main"))
                 when "repair_verify_flow"
                   repair_verify_flow(candidate, work_dir, command.fetch("fix_content"))
+                when "explain_flow"
+                  explain_flow(candidate, work_dir, artifact_dir)
+                when "handoff_flow"
+                  handoff_flow(candidate, work_dir, artifact_dir)
+                when "handoff_policy"
+                  handoff_policy_flow(candidate, work_dir, artifact_dir)
+                when "receipt_swap"
+                  receipt_swap_flow(candidate, work_dir, artifact_dir)
+                when "reuse_proof"
+                  reuse_proof(candidate, work_dir, artifact_dir)
+                when "policy_migration"
+                  policy_migration_flow(candidate, work_dir, artifact_dir)
+                when "repair_trio"
+                  repair_trio_flow(candidate, work_dir, artifact_dir)
+                when "mcp_parity"
+                  mcp_parity_flow(candidate, work_dir, artifact_dir)
+                when "mcp_session"
+                  mcp_session_flow(candidate, work_dir, artifact_dir)
+                when "mcp_explain"
+                  mcp_explain_flow(candidate, work_dir, artifact_dir)
+                when "mcp_projection"
+                  mcp_projection_flow(candidate, work_dir, artifact_dir)
                 when "mcp_review"
                   mcp_review(candidate, work_dir, command.fetch("base", "main"))
                 when "review_determinism"
@@ -956,9 +1460,14 @@ selected.each do |scenario|
                  determinism(candidate, work_dir)
                when "determinism_multi"
                  determinism_multi(candidate, work_dir, command.fetch("iterations", 20))
+               when "interrupt"
+                 interrupt_flow(candidate, work_dir, artifact_dir)
                else
                  raise "unknown scenario interface #{interface}"
                end
+    observed["fixture_base"] = fixture_base
+    observed["fixture_before"] = fixture_before
+    observed["fixture_after"] = LabSupport.fixture_identity(work_dir)
     observed["candidate"] = candidate.identity
     observed["duration_seconds"] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(3)
     observed_path = result_path(artifact_dir, "observed.json")
@@ -966,6 +1475,11 @@ selected.each do |scenario|
 
     oracle_stdout, oracle_stderr, oracle_status = LabSupport.run(["ruby", File.join(ROOT, "scripts", "lab_oracle"), "--scenario", id, "--result", observed_path, "--exit-code", observed.fetch("exit_code", 1).to_s], cwd: ROOT)
     File.write(result_path(artifact_dir, "oracle.json"), oracle_stdout)
+    begin
+      JSON.parse(oracle_stdout)
+    rescue JSON::ParserError
+      raise "oracle emitted invalid JSON for #{id}"
+    end
     File.write(result_path(artifact_dir, "oracle-diagnostics.log"), oracle_stderr)
     results << { "id" => id, "category" => scenario["category"], "status" => oracle_status.success? ? "PASS" : "FAIL", "duration_seconds" => observed["duration_seconds"], "exit_code" => observed["exit_code"] }
   rescue StandardError => error
@@ -974,10 +1488,15 @@ selected.each do |scenario|
     results << { "id" => id, "category" => scenario["category"], "status" => "BLOCKED", "duration_seconds" => failure["duration_seconds"], "error" => failure["error"] }
   ensure
     FileUtils.rm_rf(work_dir)
+    LabSupport.release_scenario_lock(lock)
   end
 end
 
 summary = { "candidate" => candidate.identity, "results" => results, "counts" => results.group_by { |result| result["status"] }.transform_values(&:length) }
 File.write(File.join(ROOT, "artifacts", "lab-run-summary.json"), JSON.pretty_generate(summary))
+if results.any? && results.all? { |result| result["status"] == "SKIPPED" }
+  $stderr.puts "All #{results.length} selected scenarios were SKIPPED; refusing to certify an empty campaign."
+  exit 2
+end
 puts JSON.pretty_generate(summary["counts"])
 exit(results.any? { |result| result["status"] == "BLOCKED" } ? 2 : results.any? { |result| result["status"] == "FAIL" } ? 1 : 0)
